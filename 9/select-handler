@@ -1,0 +1,20 @@
+if(~ $SERVER_NAME *antares-labs.eu){
+	PATH_INFO=$location
+	FS_ROOT=/usr/glenda/www/werc/sites/$SERVER_NAME
+	exec static-or-cgi /usr/glenda/www/werc/bin/werc.rc
+}
+
+if not if(~ $SERVER_NAME *rodri.gl){
+	PATH_INFO=$location
+	if(~ $location /usr/dmr*){
+		FS_ROOT=/usr/glenda/www
+		exec static-or-index
+	}
+	if not {
+		FS_ROOT=/usr/glenda/www/werc/sites/$SERVER_NAME
+		exec static-or-cgi /usr/glenda/www/werc/bin/werc.rc
+	}
+}
+
+if not
+	error 503

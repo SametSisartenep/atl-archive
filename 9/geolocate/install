@@ -1,0 +1,11 @@
+#!/bin/rc
+. <{cat /$objtype/mkfile | grep -v '^<'}
+
+RCBIN=$home/bin/rc/stalker
+
+if(! test -d $RCBIN)
+	mkdir $RCBIN
+mk
+cp $O.out $RCBIN/geoparse
+cp geolocate $RCBIN
+mk clean

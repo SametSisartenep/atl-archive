@@ -1,0 +1,12 @@
+Vec addvec(Vec, Vec);
+Vec subvec(Vec, Vec);
+Vec mulvec(Vec, double);
+double dotvec(Vec, Vec);
+Point centroid(Triangle);
+void triangle(Image *, Triangle, Image *, Point);
+void filltriangle(Image *, Triangle, Image *, Point);
+Triangle gentriangle(void);
+Triangle rotatriangle(Triangle, double);
+Triangle inrotatriangle(Triangle, double);
+void *emalloc(ulong);
+Point tobase(Point);

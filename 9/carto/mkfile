@@ -1,0 +1,8 @@
+</$objtype/mkfile
+
+TARG=\
+	info
+
+BIN=/$objtype/bin
+
+</sys/src/cmd/mkmany

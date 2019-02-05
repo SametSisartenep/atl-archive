@@ -1,0 +1,26 @@
+.PS
+define smiley {
+	# takes three arguments: x, y and size (radius)
+
+	r0 = $3			# Face
+	r1 = 0.4*r0		# Radius of mouth and eye locations
+	r2 = 0.04*r0	# Radius of eyes
+
+C: circle rad r0 at ( $1, $2 )
+
+	circle rad r2 filled at last circle + ( r1, r1 )		# Right eye
+	circle rad r2 filled at 2nd last circle + ( -r1, r1 )	# Left eye
+
+	pi = atan2( 0, -1 )
+S: C + ( r1 * cos(1.25*pi), r1 * sin(1.25*pi) )
+	line from S to S
+	for phi=1.25*pi to 1.75*pi by 0.1 do {
+		line to C + ( r1 * cos(phi), r1 * sin(phi) )		# Mouth
+	}
+}
+
+pi2 = 2 * atan2( 0, -1 )
+for x=0.1 to 1.3 by 0.08 do {
+	smiley( 1.5 * x * cos(x*pi2), 1.1 * x * sin(x*pi2), 0.23 * x )
+}
+.PE
