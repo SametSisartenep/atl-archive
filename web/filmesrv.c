@@ -17,15 +17,21 @@ typedef unsigned long long uvlong;
 
 enum {
 	Sok		= 200,
+	Spartial	= 206,
 	Sbadreq		= 400,
 	Snotfound	= 404,
+	Snotrange	= 416,
 	Snotimple	= 501,
+	Swrongvers	= 505,
 };
 char *statusmsg[] = {
  [Sok]		"OK",
+ [Spartial]	"Partial Content",
  [Sbadreq]	"Bad Request",
  [Snotfound]	"Not Found",
+ [Snotrange]	"Range Not Satisfiable",
  [Snotimple]	"Not Implemented",
+ [Swrongvers]	"HTTP Version Not Supported",
 };
 
 typedef struct Req Req;
@@ -48,8 +54,8 @@ struct HField {
 	HField *next;
 };
 
-char *httpver = "HTTP/1.1";
-char *srvname = "filmoteca";
+char httpver[] = "HTTP/1.1";
+char srvname[] = "filmoteca";
 char msgerr[] = "<!doctype html>"
 	"<html>"
 	"<head><title>ERROR</title></head>"
@@ -58,7 +64,7 @@ char msgerr[] = "<!doctype html>"
 char msghead[] = "<!doctype html>"
 	"<html>"
 	"<head><title>Filmoteca</title></head>"
-	"<body><h1>Filmoteca</h1>";
+	"<body><center><h1>Filmoteca</h1></center>";
 char msgfeet[] = "</body></html>";
 char wdir[] = "/home/pi/films";
 Req *req;
@@ -244,26 +250,6 @@ hstline(int sc)
 }
 
 void
-hparsereq(void)
-{
-	char *line, *meth, *targ, *vers, *k, *v;
-	uint n, linelen;
-
-	n = getline(&line, &linelen, stdin);
-	meth = strtok(line, " ");
-	targ = strtok(nil, " ");
-	vers = strtok(nil, " \r");
-	req = allocreq(meth, targ, vers);
-	while((n = getline(&line, &linelen, stdin)) > 0){
-		if(strcmp(line, "\r\n") == 0)
-			break;
-		k = strtok(line, ": ");
-		v = strtok(nil, " \r");
-		inserthdr(&req->fields, k, v);
-	}
-}
-
-void
 hprinthdr(void)
 {
 	HField *hp;
@@ -290,6 +276,30 @@ hfail(int sc)
 	exit(0);
 }
 
+void
+hparsereq(void)
+{
+	char *line, *meth, *targ, *vers, *k, *v;
+	uint n, linelen;
+
+	n = getline(&line, &linelen, stdin);
+	meth = strtok(line, " ");
+	targ = strtok(nil, " ");
+	vers = strtok(nil, " \r");
+	if(meth == nil || targ == nil || vers == nil)
+		hfail(Sbadreq);
+	req = allocreq(meth, targ, vers);
+	while((n = getline(&line, &linelen, stdin)) > 0){
+		if(strcmp(line, "\r\n") == 0)
+			break;
+		k = strtok(line, ": ");
+		v = strtok(nil, " \r");
+		if(k == nil || v == nil)
+			hfail(Sbadreq);
+		inserthdr(&req->fields, k, v);
+	}
+}
+
 int
 main()
 {
@@ -305,7 +315,7 @@ main()
 	if(strcmp(req->method, "GET") != 0 && strcmp(req->method, "HEAD") != 0)
 		hfail(Snotimple);
 	if(strcmp(req->version, httpver) != 0)
-		hfail(Snotimple);
+		hfail(Swrongvers);
 	snprintf(path, sizeof path, "%s%s", wdir, req->target);
 	if(urldecode(path, path, strlen(path)) < 0)
 		sysfatal("urldecode");
@@ -315,12 +325,9 @@ main()
 		if(f < 0)
 			sysfatal("open");
 		mimetype(f, mime, sizeof mime);
-		res = allocres(Sok);
-		inserthdr(&res->fields, "Accept-Ranges", "bytes");
-		inserthdr(&res->fields, "Content-Type", mime);
 		clen = fst.st_size;
 		if((s = lookuphdr(req->fields, "Range")) != nil){
-			while(!isdigit(*s++))
+			while(!isdigit(*++s))
 				;
 			brange[0] = strtol(s, &s, 0);
 			if(*s++ != '-')
@@ -329,18 +336,25 @@ main()
 				brange[1] = fst.st_size-1;
 			else
 				brange[1] = strtol(s, &s, 0);
-			if(brange[0] > brange[1] || brange[1] >= fst.st_size)
-				hfail(Sbadreq);
-			lseek(f, brange[0], SEEK_SET);
-			clen = brange[1]-brange[0]+1;
-			snprintf(crstr, sizeof crstr, "bytes %llu-%llu/%llu",
-				brange[0], brange[1], fst.st_size);
+			if(brange[0] > brange[1] || brange[1] >= fst.st_size){
+				res = allocres(Snotrange);
+				snprintf(crstr, sizeof crstr, "bytes */%llu",
+					fst.st_size);
+			}else{
+				res = allocres(Spartial);
+				lseek(f, brange[0], SEEK_SET);
+				clen = brange[1]-brange[0]+1;
+				snprintf(crstr, sizeof crstr, "bytes %llu-%llu/%llu",
+					brange[0], brange[1], fst.st_size);
+			}
 			inserthdr(&res->fields, "Content-Range", crstr);
-		}
+		}else
+			res = allocres(Sok);
+		inserthdr(&res->fields, "Accept-Ranges", "bytes");
+		inserthdr(&res->fields, "Content-Type", mime);
 		snprintf(clstr, sizeof clstr, "%llu", clen);
 		inserthdr(&res->fields, "Content-Length", clstr);
-		if((s = lookuphdr(req->fields, "Connection")) != nil &&
-		    strcmp(s, "close") == 0)
+		if((s = lookuphdr(req->fields, "Connection")) != nil)
 			inserthdr(&res->fields, "Connection", s);
 		hprinthdr();
 		if(strcmp(req->method, "HEAD") == 0){
@@ -348,9 +362,10 @@ main()
 			exit(0);
 		}
 		while(clen -= n, (n = read(f, buf, sizeof buf)) > 0 && clen > 0)
-			write(1, buf, n);
+			if(write(1, buf, n) <= 0)
+				break;
 		close(f);
-		goto end;
+		exit(0);
 	}
 	d = opendir(path);
 	if(d == nil)
@@ -382,7 +397,6 @@ main()
 				dir->d_name, dir->d_name);
 	printf("</ul>");
 	printf(msgfeet);
-end:
 	hprint("");
 	exit(0);
 }
