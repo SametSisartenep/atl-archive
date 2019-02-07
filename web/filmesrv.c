@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <errno.h>
 
 #define nil NULL
 typedef unsigned int uint;
@@ -19,8 +20,10 @@ enum {
 	Sok		= 200,
 	Spartial	= 206,
 	Sbadreq		= 400,
+	Sforbid		= 403,
 	Snotfound	= 404,
 	Snotrange	= 416,
+	Sinternal	= 500,
 	Snotimple	= 501,
 	Swrongvers	= 505,
 };
@@ -28,8 +31,10 @@ char *statusmsg[] = {
  [Sok]		"OK",
  [Spartial]	"Partial Content",
  [Sbadreq]	"Bad Request",
+ [Sforbid]	"Forbidden",
  [Snotfound]	"Not Found",
  [Snotrange]	"Range Not Satisfiable",
+ [Sinternal]	"Internal Server Error",
  [Snotimple]	"Not Implemented",
  [Swrongvers]	"HTTP Version Not Supported",
 };
@@ -56,11 +61,7 @@ struct HField {
 
 char httpver[] = "HTTP/1.1";
 char srvname[] = "filmoteca";
-char msgerr[] = "<!doctype html>"
-	"<html>"
-	"<head><title>ERROR</title></head>"
-	"<body><h1>NO MOVIES HERE</h1></body>"
-	"</html>";
+char msgerr[] = "no movies here";
 char msghead[] = "<!doctype html>"
 	"<html>"
 	"<head><title>Filmoteca</title></head>"
@@ -110,7 +111,7 @@ urldecode(char *url, char *out, long n)
 	return o - out;
 }
 
-void
+int
 mimetype(int fd, char *mime, long len)
 {
 	char m[256];
@@ -123,9 +124,9 @@ mimetype(int fd, char *mime, long len)
 
 	memset(m, 0, sizeof m);
 	if(pipe(pf) < 0)
-		sysfatal("pipe");
+		return -1;
 	switch(fork()){
-	case -1: sysfatal("fork");
+	case -1: return -1;
 	case 0:
 		close(pf[0]);
 		dup2(fd, 0);
@@ -142,6 +143,7 @@ mimetype(int fd, char *mime, long len)
 		strncpy(mime, m, len);
 		wait(nil);
 	}
+	return 0;
 }
 
 HField *
@@ -268,12 +270,28 @@ hfail(int sc)
 
 	res = allocres(sc);
 	snprintf(clen, sizeof clen, "%u", strlen(msgerr));
-	inserthdr(&res->fields, "Content-Type", "text/html; charset=utf-8");
+	inserthdr(&res->fields, "Content-Type", "text/plain; charset=utf-8");
 	inserthdr(&res->fields, "Content-Length", clen);
 	hprinthdr();
 	hprint("%s", msgerr);
 	hprint("");
 	exit(0);
+}
+
+void
+hfatal(char *ctx)
+{
+	char clen[16];
+
+	res = allocres(Sinternal);
+	snprintf(clen, sizeof clen, "%u", strlen(msgerr));
+	inserthdr(&res->fields, "Content-Type", "text/plain; charset=utf-8");
+	inserthdr(&res->fields, "Content-Length", clen);
+	hprinthdr();
+	hprint("%s", msgerr);
+	hprint("");
+	fflush(stdout);
+	sysfatal(ctx);
 }
 
 void
@@ -318,13 +336,19 @@ main()
 		hfail(Swrongvers);
 	snprintf(path, sizeof path, "%s%s", wdir, req->target);
 	if(urldecode(path, path, strlen(path)) < 0)
-		sysfatal("urldecode");
-	stat(path, &fst);
+		hfatal("urldecode");
+	if(stat(path, &fst) < 0)
+		switch(errno){
+		case EACCES: hfail(Sforbid);
+		case ENOENT: hfail(Snotfound);
+		default: hfatal("stat");
+		}
 	if(S_ISREG(fst.st_mode)){
 		f = open(path, O_RDONLY);
 		if(f < 0)
-			sysfatal("open");
-		mimetype(f, mime, sizeof mime);
+			hfatal("open");
+		if(mimetype(f, mime, sizeof mime) < 0)
+			hfatal("mimetype");
 		clen = fst.st_size;
 		if((s = lookuphdr(req->fields, "Range")) != nil){
 			while(!isdigit(*++s))
@@ -369,7 +393,7 @@ main()
 	}
 	d = opendir(path);
 	if(d == nil)
-		hfail(Snotfound);
+		hfatal("opendir");
 	clen = 0;
 	clen += strlen(msghead)+4;
 	while((dir = readdir(d)) != nil)
