@@ -62,14 +62,22 @@ struct HField {
 char httpver[] = "HTTP/1.1";
 char srvname[] = "filmoteca";
 char msgerr[] = "no movies here";
-char msghead[] = "<!doctype html>"
-	"<html>"
-	"<head><title>Filmoteca</title></head>"
-	"<body><center><h1>Filmoteca</h1></center>";
+char msghead[] = "<!doctype html>\n"
+	"<html>\n"
+	"<head>\n"
+	"<link rel=\"stylesheet\" href=\"/style\" media=\"all\" type=\"text/css\"/>\n"
+	"<title>Filmoteca</title>\n"
+	"</head><body>\n"
+	"<h1>Filmoteca</h1>\n";
 char msgfeet[] = "</body></html>";
+char stylepath[] = "/home/pi/lib/film/style.css";
 char wdir[] = "/home/pi/films";
+char **dirlist;
+int ndir;
 Req *req;
 Res *res;
+
+void hfatal(char *);
 
 /* a crappy mimic of the original */
 void
@@ -86,27 +94,37 @@ emalloc(long n)
 
 	p = malloc(n);
 	if(p == nil)
-		sysfatal("malloc");
+		hfatal("malloc");
 	memset(p, 0, n);
+	return p;
+}
+
+void *
+erealloc(void *ptr, long n)
+{
+	void *p;
+
+	p = realloc(ptr, n);
+	if(p == nil)
+		hfatal("realloc");
 	return p;
 }
 
 int
 urldecode(char *url, char *out, long n)
 {
-	char *o;
-	char *ep = url+n;
+	char *o, *ep;
 	int c;
 
+	ep = url+n;
 	for(o = out; url <= ep; o++){
 		c = *url++;
 		if(c == '%' &&
-		   (!isxdigit(*url++) ||
+		    (!isxdigit(*url++) ||
 		    !isxdigit(*url++) ||
 		    !sscanf(url-2, "%2x", &c)))
 			return -1;
-		if(out)
-			*o = c;
+		*o = c;
 	}
 	return o - out;
 }
@@ -323,9 +341,9 @@ main()
 {
 	DIR *d;
 	struct dirent *dir;
+	int f, i;
 	struct stat fst;
 	char buf[8*1024], mime[256], path[512], *s, crstr[6+3*16+1+1+1], clstr[16];
-	int f;
 	uvlong brange[2], n, clen;
 
 	n = clen = 0;
@@ -334,9 +352,12 @@ main()
 		hfail(Snotimple);
 	if(strcmp(req->version, httpver) != 0)
 		hfail(Swrongvers);
-	snprintf(path, sizeof path, "%s%s", wdir, req->target);
+	if(strcmp(req->target, "/style") == 0)
+		snprintf(path, sizeof path, "%s", stylepath);
+	else
+		snprintf(path, sizeof path, "%s%s", wdir, req->target);
 	if(urldecode(path, path, strlen(path)) < 0)
-		hfatal("urldecode");
+		hfail(Sbadreq);
 	if(stat(path, &fst) < 0)
 		switch(errno){
 		case EACCES: hfail(Sforbid);
@@ -347,7 +368,9 @@ main()
 		f = open(path, O_RDONLY);
 		if(f < 0)
 			hfatal("open");
-		if(mimetype(f, mime, sizeof mime) < 0)
+		if(strcmp(path, stylepath) == 0)
+			snprintf(mime, sizeof mime, "%s", "text/css; charset=utf-8");
+		else if(mimetype(f, mime, sizeof mime) < 0)
 			hfatal("mimetype");
 		clen = fst.st_size;
 		if((s = lookuphdr(req->fields, "Range")) != nil){
@@ -381,13 +404,12 @@ main()
 		if((s = lookuphdr(req->fields, "Connection")) != nil)
 			inserthdr(&res->fields, "Connection", s);
 		hprinthdr();
-		if(strcmp(req->method, "HEAD") == 0){
-			close(f);
-			exit(0);
-		}
+		if(strcmp(req->method, "HEAD") == 0)
+			goto EOT;
 		while(clen -= n, (n = read(f, buf, sizeof buf)) > 0 && clen > 0)
 			if(write(1, buf, n) <= 0)
 				break;
+EOT:
 		close(f);
 		exit(0);
 	}
@@ -398,10 +420,12 @@ main()
 	clen += strlen(msghead)+4;
 	while((dir = readdir(d)) != nil)
 		if(strcmp(dir->d_name, ".") != 0 &&
-		   strcmp(dir->d_name, "..") != 0 &&
-		   dir->d_type & DT_DIR|DT_LNK)
-			clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+5;
-	clen += 5+strlen(msgfeet);
+		   strcmp(dir->d_name, "..") != 0){
+			dirlist = erealloc(dirlist, ++ndir*sizeof(char *));
+			dirlist[ndir-1] = strdup(dir->d_name);
+			clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+5+1;
+		}
+	clen += 6+strlen(msgfeet);
 	snprintf(clstr, sizeof clstr, "%llu", clen);
 	res = allocres(Sok);
 	inserthdr(&res->fields, "Content-Type", "text/html; charset=utf-8");
@@ -412,14 +436,11 @@ main()
 	printf(msghead);
 	printf("<ul>");
 	rewinddir(d);
-	while((dir = readdir(d)) != nil)
-		if(strcmp(dir->d_name, ".") != 0 &&
-		   strcmp(dir->d_name, "..") != 0 &&
-		   dir->d_type & DT_DIR|DT_LNK)
-			printf("<li><a href=\"%s/%s\">%s</a></li>",
-				strcmp(req->target, "/") ? req->target : "",
-				dir->d_name, dir->d_name);
-	printf("</ul>");
+	for(i = 0; i < ndir; i++)
+			printf("<li><a href=\"%s/%s\">%s</a></li>\n",
+				strcmp(req->target, "/") == 0 ? "" : req->target,
+				dirlist[i], dirlist[i]);
+	printf("</ul>\n");
 	printf(msgfeet);
 	hprint("");
 	exit(0);
