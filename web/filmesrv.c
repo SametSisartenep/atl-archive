@@ -25,7 +25,7 @@ enum {
 	Snotrange	= 416,
 	Sinternal	= 500,
 	Snotimple	= 501,
-	Swrongvers	= 505,
+	Swrongver	= 505,
 };
 char *statusmsg[] = {
  [Sok]		"OK",
@@ -36,7 +36,7 @@ char *statusmsg[] = {
  [Snotrange]	"Range Not Satisfiable",
  [Sinternal]	"Internal Server Error",
  [Snotimple]	"Not Implemented",
- [Swrongvers]	"HTTP Version Not Supported",
+ [Swrongver]	"HTTP Version Not Supported",
 };
 
 typedef struct Req Req;
@@ -49,7 +49,6 @@ struct Req {
 };
 
 struct Res {
-	char *version;
 	int status;
 	HField *fields;
 };
@@ -236,7 +235,6 @@ allocres(int sc)
 	Res *r;
 
 	r = emalloc(sizeof(Res));
-	r->version = strdup(httpver);
 	r->status = sc;
 	inserthdr(&r->fields, "Server", srvname);
 	return r;
@@ -246,7 +244,6 @@ void
 freeres(Res *r)
 {
 	freehdr(r->fields);
-	free(r->version);
 	free(r);
 }
 
@@ -299,13 +296,10 @@ hfail(int sc)
 void
 hfatal(char *ctx)
 {
-	char clen[16];
-
-	res = allocres(Sinternal);
-	snprintf(clen, sizeof clen, "%u", strlen(msgerr));
-	inserthdr(&res->fields, "Content-Type", "text/plain; charset=utf-8");
-	inserthdr(&res->fields, "Content-Length", clen);
-	hprinthdr();
+	hstline(Sinternal);
+	hprint("Content-Type: %s", "text/plain; charset=utf-8");
+	hprint("Content-Length: %u", strlen(msgerr));
+	hprint("");
 	hprint("%s", msgerr);
 	hprint("");
 	fflush(stdout);
@@ -351,7 +345,7 @@ main()
 	if(strcmp(req->method, "GET") != 0 && strcmp(req->method, "HEAD") != 0)
 		hfail(Snotimple);
 	if(strcmp(req->version, httpver) != 0)
-		hfail(Swrongvers);
+		hfail(Swrongver);
 	if(strcmp(req->target, "/style") == 0)
 		snprintf(path, sizeof path, "%s", stylepath);
 	else
@@ -437,9 +431,9 @@ EOT:
 	printf("<ul>");
 	rewinddir(d);
 	for(i = 0; i < ndir; i++)
-			printf("<li><a href=\"%s/%s\">%s</a></li>\n",
-				strcmp(req->target, "/") == 0 ? "" : req->target,
-				dirlist[i], dirlist[i]);
+		printf("<li><a href=\"%s/%s\">%s</a></li>\n",
+			strcmp(req->target, "/") == 0 ? "" : req->target,
+			dirlist[i], dirlist[i]);
 	printf("</ul>\n");
 	printf(msgfeet);
 	hprint("");
