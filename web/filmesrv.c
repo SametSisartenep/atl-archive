@@ -61,14 +61,12 @@ struct HField {
 char httpver[] = "HTTP/1.1";
 char srvname[] = "filmoteca";
 char msgerr[] = "no movies here";
-char msghead[] = "<!doctype html>\n"
-	"<html>\n"
-	"<head>\n"
+char msghead[] = "<!doctype html>\n<html>\n<head>\n"
 	"<link rel=\"stylesheet\" href=\"/style\" media=\"all\" type=\"text/css\"/>\n"
 	"<title>Filmoteca</title>\n"
-	"</head><body>\n"
+	"</head>\n<body>\n"
 	"<h1>Filmoteca</h1>\n";
-char msgfeet[] = "</body></html>";
+char msgfeet[] = "</body>\n</html>";
 char stylepath[] = "/home/pi/lib/film/style.css";
 char wdir[] = "/home/pi/films";
 char **dirlist;
@@ -119,7 +117,7 @@ urldecode(char *url, char *out, long n)
 	for(o = out; url <= ep; o++){
 		c = *url++;
 		if(c == '%' &&
-		    (!isxdigit(*url++) ||
+		   (!isxdigit(*url++) ||
 		    !isxdigit(*url++) ||
 		    !sscanf(url-2, "%2x", &c)))
 			return -1;
@@ -155,6 +153,8 @@ mimetype(int fd, char *mime, long len)
 		close(pf[1]);
 		read(pf[0], m, sizeof m);
 		close(pf[0]);
+		if(strcmp(req->target, "/style") == 0)
+			strncpy(m, "text/css; charset=utf-8", sizeof m);
 		if(strncmp(m, "audio", 5) == 0)
 			strncpy(m, "video", 5);
 		strncpy(mime, m, len);
@@ -347,7 +347,7 @@ main()
 	if(strcmp(req->version, httpver) != 0)
 		hfail(Swrongver);
 	if(strcmp(req->target, "/style") == 0)
-		snprintf(path, sizeof path, "%s", stylepath);
+		strncpy(path, stylepath, sizeof path);
 	else
 		snprintf(path, sizeof path, "%s%s", wdir, req->target);
 	if(urldecode(path, path, strlen(path)) < 0)
@@ -362,9 +362,7 @@ main()
 		f = open(path, O_RDONLY);
 		if(f < 0)
 			hfatal("open");
-		if(strcmp(path, stylepath) == 0)
-			snprintf(mime, sizeof mime, "%s", "text/css; charset=utf-8");
-		else if(mimetype(f, mime, sizeof mime) < 0)
+		if(mimetype(f, mime, sizeof mime) < 0)
 			hfatal("mimetype");
 		clen = fst.st_size;
 		if((s = lookuphdr(req->fields, "Range")) != nil){
@@ -411,7 +409,7 @@ EOT:
 	if(d == nil)
 		hfatal("opendir");
 	clen = 0;
-	clen += strlen(msghead)+4;
+	clen += strlen(msghead)+5;
 	while((dir = readdir(d)) != nil)
 		if(strcmp(dir->d_name, ".") != 0 &&
 		   strcmp(dir->d_name, "..") != 0){
@@ -428,7 +426,7 @@ EOT:
 	if(strcmp(req->method, "HEAD") == 0)
 		exit(0);
 	printf(msghead);
-	printf("<ul>");
+	printf("<ul>\n");
 	rewinddir(d);
 	for(i = 0; i < ndir; i++)
 		printf("<li><a href=\"%s/%s\">%s</a></li>\n",
