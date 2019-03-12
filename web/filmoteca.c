@@ -7,7 +7,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <dirent.h>
-#include <fcntl.h>
 #include <ctype.h>
 #include <errno.h>
 
@@ -354,15 +353,15 @@ hparsereq(void)
 void
 sendfile(char *path, struct stat *fst)
 {
-	char buf[8*1024], mime[256], *s, crstr[6+3*16+1+1+1], clstr[16];
+	char buf[64*1024], mime[256], *s, crstr[6+3*16+1+1+1], clstr[16];
 	uvlong brange[2], n, clen;
-	int f;
+	FILE *f;
 
 	n = clen = 0;
-	f = open(path, O_RDONLY);
-	if(f < 0)
-		hfatal("sendfile: open");
-	if(mimetype(f, mime, sizeof(mime)-1) < 0)
+	f = fopen(path, "r");
+	if(f == nil)
+		hfatal("sendfile: fopen");
+	if(mimetype(fileno(f), mime, sizeof(mime)-1) < 0)
 		hfatal("sendfile: mimetype");
 	mime[strlen(mime)] = 0;
 	clen = fst->st_size;
@@ -384,7 +383,7 @@ sendfile(char *path, struct stat *fst)
 				fst->st_size);
 		}else{
 			res = allocres(Spartial);
-			lseek(f, brange[0], SEEK_SET);
+			fseeko(f, brange[0], SEEK_SET);
 			clen = brange[1]-brange[0]+1;
 			snprintf(crstr, sizeof crstr, "bytes %llu-%llu/%llu",
 				brange[0], brange[1], fst->st_size);
@@ -401,11 +400,15 @@ sendfile(char *path, struct stat *fst)
 	hprinthdr();
 	if(strcmp(req->method, "HEAD") == 0)
 		goto EOT;
-	while(clen -= n, (n = read(f, buf, sizeof buf)) > 0 && clen > 0)
-		if(write(1, buf, n) <= 0)
+	while(clen -= n, !feof(f) && clen > 0){
+		n = fread(buf, 1, sizeof buf, f);
+		if(ferror(f))
 			break;
+		if(fwrite(buf, 1, n, stdout) <= 0)
+			break;
+	}
 EOT:
-	close(f);
+	fclose(f);
 }
 
 void
@@ -454,8 +457,8 @@ void
 sendportal(char *path)
 {
 	char clstr[16], *title, infopath[512], date[16];
-	uvlong n, clen;
-	int f;
+	uvlong clen;
+	FILE *f;
 
 	clen = 0;
 	memset(infopath, 0, sizeof infopath);
@@ -463,13 +466,14 @@ sendportal(char *path)
 	if(*++title == 0)
 		hfail(Sbadreq);
 	snprintf(infopath, sizeof(infopath)-1, "%s/%s", path, "release");
-	f = open(infopath, O_RDONLY);
-	if(f < 0)
-		hfatal("sendportal: open");
-	if((n = read(f, date, sizeof(date)-1)) < 0)
-		hfatal("sendportal: read");
+	f = fopen(infopath, "r");
+	if(f == nil)
+		hfatal("sendportal: fopen");
+	fread(date, 1, sizeof(date)-1, f);
+	if(ferror(f))
+		hfatal("sendportal: fread");
 	date[strlen(date)] = 0;
-	close(f);
+	fclose(f);
 	clen += strlen(portalhead) + 2*strlen(title);
 	clen += strlen(portalbody) + 2*strlen(req->target) +
 		strlen(date) + 2*strlen(req->target);
