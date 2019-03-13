@@ -71,10 +71,11 @@ char portalhead[] = "<!doctype html>\n<html>\n<head>\n"
 	"<title>Filmoteca - %s</title>\n"
 	"</head>\n<body>\n"
 	"<h1>%s</h1>\n";
-char portalbody[] = "<a href=\"%s/cover\"><img id=\"cover\" src=\"%s/cover\"/></a>\n"
-	"<table>\n"
+char portalcover[] = "<a href=\"%s/cover\"><img id=\"cover\" src=\"%s/cover\"/></a>\n";
+char portalrelease[] = "<table>\n"
 	"\t<tr>\n"
-	"\t\t<td>Release</td><td>%s</td>\n"
+	"\t\t<td>Release</td><td>";
+char portalstream[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
 	"\t\t<td>Stream</td><td><a href=\"%s/video\">link</a></td>\n"
@@ -120,6 +121,23 @@ erealloc(void *ptr, long n)
 	if(p == nil)
 		hfatal("realloc");
 	return p;
+}
+
+long
+truestrlen(char *s)
+{
+	char *e;
+	int waste;
+
+	waste = 0;
+	for(e = s; *e != 0; e++)
+		if(*e == '%' && *(e+1) != '%'){
+			waste++;
+			/* rudimentary but works for me. */
+			while((isalnum(*++e) || *e == '.') && *e != 0)
+				waste++;
+		}
+	return e-s-waste;
 }
 
 int
@@ -328,7 +346,8 @@ void
 hparsereq(void)
 {
 	char *line, *meth, *targ, *vers, *k, *v;
-	uint n, linelen;
+	uint linelen;
+	int n;
 
 	n = getline(&line, &linelen, stdin);
 	meth = strtok(line, " ");
@@ -353,9 +372,9 @@ hparsereq(void)
 void
 sendfile(char *path, struct stat *fst)
 {
+	FILE *f;
 	char buf[64*1024], mime[256], *s, crstr[6+3*16+1+1+1], clstr[16];
 	uvlong brange[2], n, clen;
-	FILE *f;
 
 	n = clen = 0;
 	f = fopen(path, "r");
@@ -424,8 +443,7 @@ sendlist(char *path)
 	d = opendir(path);
 	if(d == nil)
 		hfatal("sendlist: opendir");
-	clen = 0;
-	clen += strlen(listhead)+5;
+	clen += truestrlen(listhead)+5;
 	while((dir = readdir(d)) != nil)
 		if(strcmp(dir->d_name, ".") != 0 &&
 		   strcmp(dir->d_name, "..") != 0){
@@ -433,7 +451,8 @@ sendlist(char *path)
 			dirlist[ndir-1] = strdup(dir->d_name);
 			clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+5+1;
 		}
-	clen += 6+strlen(listfeet);
+	closedir(d);
+	clen += 6+truestrlen(listfeet);
 	snprintf(clstr, sizeof clstr, "%llu", clen);
 	res = allocres(Sok);
 	inserthdr(&res->fields, "Content-Type", "text/html; charset=utf-8");
@@ -443,7 +462,6 @@ sendlist(char *path)
 		return;
 	printf(listhead);
 	printf("<ul>\n");
-	rewinddir(d);
 	for(i = 0; i < ndir; i++)
 		printf("<li><a href=\"%s/%s\">%s</a></li>\n",
 			strcmp(req->target, "/") == 0 ? "" : req->target,
@@ -456,28 +474,56 @@ sendlist(char *path)
 void
 sendportal(char *path)
 {
-	char clstr[16], *title, infopath[512], date[16];
-	uvlong clen;
 	FILE *f;
+	DIR *d;
+	struct dirent *dir;
+	char *title, auxpath[512], *date, **datel, season[5], clstr[16];
+	uvlong clen;
+	uint linelen;
+	int itsaseries, n, nseason, i;
 
-	clen = 0;
-	memset(infopath, 0, sizeof infopath);
+	n = clen = itsaseries = nseason = 0;
+	datel = nil;
+	memset(auxpath, 0, sizeof auxpath);
 	title = strrchr(path, '/');
 	if(*++title == 0)
 		hfail(Sbadreq);
-	snprintf(infopath, sizeof(infopath)-1, "%s/%s", path, "release");
-	f = fopen(infopath, "r");
+	d = opendir(path);
+	if(d == nil)
+		hfatal("sendportal: opendir");
+	while((dir = readdir(d)) != nil)
+		if(strcmp(dir->d_name, "s") == 0){
+			itsaseries++;
+			break;
+		}
+	closedir(d);
+	snprintf(auxpath, sizeof(auxpath)-1, "%s/%s", path, "release");
+	f = fopen(auxpath, "r");
 	if(f == nil)
 		hfatal("sendportal: fopen");
-	fread(date, 1, sizeof(date)-1, f);
-	if(ferror(f))
-		hfatal("sendportal: fread");
-	date[strlen(date)] = 0;
+	if(itsaseries){
+		clen += 5;
+		while((n = getline(&date, &linelen, f)) > 0){
+			datel = erealloc(datel, ++nseason*sizeof(char *));
+			if(date[n-1] == '\n')
+				date[(n--)-1] = 0;
+			datel[nseason-1] = strdup(date);
+			snprintf(season, sizeof(season)-1, "%d", nseason);
+			season[strlen(season)] = 0;
+			clen += 4+7+strlen(season)+4+n+6;
+		}
+		clen += 5;
+	}else{
+		n = getline(&date, &linelen, f);
+		datel = malloc(++nseason*sizeof(char *));
+		datel[nseason-1] = strdup(date);
+		clen += n;
+	}
 	fclose(f);
-	clen += strlen(portalhead) + 2*strlen(title);
-	clen += strlen(portalbody) + 2*strlen(req->target) +
-		strlen(date) + 2*strlen(req->target);
-	clen += strlen(portalfeet);
+	clen += truestrlen(portalhead) + 2*strlen(title);
+	clen += truestrlen(portalcover) + 2*strlen(req->target) +
+		truestrlen(portalrelease) + truestrlen(portalstream) + strlen(req->target);
+	clen += truestrlen(portalfeet);
 	snprintf(clstr, sizeof clstr, "%llu", clen);
 	res = allocres(Sok);
 	inserthdr(&res->fields, "Content-Type", "text/html; charset=utf-8");
@@ -486,7 +532,17 @@ sendportal(char *path)
 	if(strcmp(req->method, "HEAD") == 0)
 		return;
 	printf(portalhead, title, title);
-	printf(portalbody, req->target, req->target, date, req->target);
+	printf(portalcover, req->target, req->target);
+	printf(portalrelease);
+	if(itsaseries){
+		printf("<ul>\n");
+		for(i = 0; i < nseason; i++)
+			printf("<li>Season %d on %s</li>\n", i+1, datel[i]);
+		printf("</ul>");
+	}else
+		for(i = 0; i < nseason; i++)
+			fwrite(datel[i], 1, strlen(datel[i]), stdout);
+	printf(portalstream, req->target);
 	printf(portalfeet);
 	hprint("");
 }
