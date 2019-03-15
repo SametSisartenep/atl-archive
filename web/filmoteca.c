@@ -38,6 +38,13 @@ char *statusmsg[] = {
  [Swrongver]	"HTTP Version Not Supported",
 };
 
+/* not that sure about this. */
+enum {
+	RTmovie		= 0,
+	RTseries,
+	RTmultipart,
+};
+
 typedef struct Req Req;
 typedef struct Res Res;
 typedef struct HField HField;
@@ -79,6 +86,15 @@ char portalstream[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
 	"\t\t<td>Stream</td><td><a href=\"%s/video\">link</a></td>\n"
+	"\t</tr>\n"
+	"\t<tr>\n"
+	"\t\t<td>Subs</td><td>TBD</td>\n"
+	"\t</tr>\n"
+	"\t<tr>\n"
+	"\t\t<td>Dubs</td><td>TBD</td>\n"
+	"\t</tr>\n"
+	"\t<tr>\n"
+	"\t\t<td>Extras</td><td>TBD</td>\n"
 	"\t</tr>\n"
 	"</table>\n";
 char portalfeet[] = "</body>\n</html>\n";
@@ -389,13 +405,13 @@ sendfile(char *path, struct stat *fst)
 			;
 		if(*s == 0)
 			hfail(Sbadreq);
-		brange[0] = strtol(s, &s, 0);
+		brange[0] = strtoll(s, &s, 0);
 		if(*s++ != '-')
 			hfail(Sbadreq);
 		if(!isdigit(*s))
 			brange[1] = fst->st_size-1;
 		else
-			brange[1] = strtol(s, &s, 0);
+			brange[1] = strtoll(s, &s, 0);
 		if(brange[0] > brange[1] || brange[1] >= fst->st_size){
 			res = allocres(Snotrange);
 			snprintf(crstr, sizeof crstr, "bytes */%llu",
@@ -480,9 +496,10 @@ sendportal(char *path)
 	char *title, auxpath[512], *date, **datel, season[5], clstr[16];
 	uvlong clen;
 	uint linelen;
-	int itsaseries, n, nseason, i;
+	int rtype, n, ndate, i;
 
-	n = clen = itsaseries = nseason = 0;
+	n = clen = ndate = 0;
+	rtype = RTmovie;
 	datel = nil;
 	memset(auxpath, 0, sizeof auxpath);
 	title = strrchr(path, '/');
@@ -493,30 +510,35 @@ sendportal(char *path)
 		hfatal("sendportal: opendir");
 	while((dir = readdir(d)) != nil)
 		if(strcmp(dir->d_name, "s") == 0){
-			itsaseries++;
+			rtype = RTseries;
 			break;
 		}
 	closedir(d);
 	snprintf(auxpath, sizeof(auxpath)-1, "%s/%s", path, "release");
 	f = fopen(auxpath, "r");
-	if(f == nil)
-		hfatal("sendportal: fopen");
-	if(itsaseries){
+	if(f == nil){
+		//hfatal("sendportal: fopen");
+		sendlist(path);
+		exit(0);
+	}
+	if(rtype == RTseries){
 		clen += 5;
 		while((n = getline(&date, &linelen, f)) > 0){
-			datel = erealloc(datel, ++nseason*sizeof(char *));
+			datel = erealloc(datel, ++ndate*sizeof(char *));
 			if(date[n-1] == '\n')
 				date[(n--)-1] = 0;
-			datel[nseason-1] = strdup(date);
-			snprintf(season, sizeof(season)-1, "%d", nseason);
+			datel[ndate-1] = strdup(date);
+			snprintf(season, sizeof(season)-1, "%d", ndate);
 			season[strlen(season)] = 0;
 			clen += 4+7+strlen(season)+4+n+6;
 		}
 		clen += 5;
 	}else{
 		n = getline(&date, &linelen, f);
-		datel = malloc(++nseason*sizeof(char *));
-		datel[nseason-1] = strdup(date);
+		datel = malloc(++ndate*sizeof(char *));
+		if(date[n-1] == '\n')
+			date[(n--)-1] = 0;
+		datel[ndate-1] = strdup(date);
 		clen += n;
 	}
 	fclose(f);
@@ -534,13 +556,13 @@ sendportal(char *path)
 	printf(portalhead, title, title);
 	printf(portalcover, req->target, req->target);
 	printf(portalrelease);
-	if(itsaseries){
+	if(rtype == RTseries){
 		printf("<ul>\n");
-		for(i = 0; i < nseason; i++)
+		for(i = 0; i < ndate; i++)
 			printf("<li>Season %d on %s</li>\n", i+1, datel[i]);
 		printf("</ul>");
 	}else
-		for(i = 0; i < nseason; i++)
+		for(i = 0; i < ndate; i++)
 			fwrite(datel[i], 1, strlen(datel[i]), stdout);
 	printf(portalstream, req->target);
 	printf(portalfeet);
