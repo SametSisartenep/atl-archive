@@ -82,22 +82,27 @@ char portalcover[] = "<a href=\"%s/cover\"><img id=\"cover\" src=\"%s/cover\"/><
 char portalrelease[] = "<table>\n"
 	"\t<tr>\n"
 	"\t\t<td>Release</td><td>";
-char portalstream[] = "</td>\n"
+char portalmoviestream[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
-	"\t\t<td>Stream</td><td><a href=\"%s/video\">link</a></td>\n"
+	"\t\t<td>Stream</td><td><a href=\"%s/video\">link</a>";
+char portalseriestream[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
-	"\t\t<td>Subs</td><td>TBD</td>\n"
+	"\t\t<td>Stream</td><td>";
+char portalsub[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
-	"\t\t<td>Dubs</td><td>TBD</td>\n"
+	"\t\t<td>Subs</td><td>";
+char portaldub[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
-	"\t\t<td>Extras</td><td>TBD</td>\n"
+	"\t\t<td>Dubs</td><td>";
+char portalextra[] = "</td>\n"
 	"\t</tr>\n"
-	"</table>\n";
-char portalfeet[] = "</body>\n</html>\n";
+	"\t<tr>\n"
+	"\t\t<td>Extras</td><td>";
+char portalfeet[] = "</td>\n\t</tr>\n</table>\n</body>\n</html>\n";
 char stylepath[] = "/home/pi/lib/film/style.css";
 char fvicopath[] = "/home/pi/lib/film/favicon.ico";
 char wdir[] = "/home/pi/films";
@@ -154,6 +159,18 @@ truestrlen(char *s)
 				waste++;
 		}
 	return e-s-waste;
+}
+
+int
+numcmp(const void *a, const void *b)
+{
+	int na, nb;
+	char **sa = (char **)a;
+	char **sb = (char **)b;
+
+	na = strtol(*sa, nil, 0);
+	nb = strtol(*sb, nil, 0);
+	return na - nb;
 }
 
 int
@@ -405,13 +422,13 @@ sendfile(char *path, struct stat *fst)
 			;
 		if(*s == 0)
 			hfail(Sbadreq);
-		brange[0] = strtoll(s, &s, 0);
+		brange[0] = strtoull(s, &s, 0);
 		if(*s++ != '-')
 			hfail(Sbadreq);
 		if(!isdigit(*s))
 			brange[1] = fst->st_size-1;
 		else
-			brange[1] = strtoll(s, &s, 0);
+			brange[1] = strtoull(s, &s, 0);
 		if(brange[0] > brange[1] || brange[1] >= fst->st_size){
 			res = allocres(Snotrange);
 			snprintf(crstr, sizeof crstr, "bytes */%llu",
@@ -493,14 +510,17 @@ sendportal(char *path)
 	FILE *f;
 	DIR *d;
 	struct dirent *dir;
-	char *title, auxpath[512], *date, **datel, season[5], clstr[16];
+	char *title, auxpath[512], *date, season[5], clstr[16];
+	char **datel, ***episodel, **subl, **extral;
 	uvlong clen;
 	uint linelen;
-	int rtype, n, ndate, i;
+	int rtype, n, ndate, *nepisode, nsub, nextra, i, j;
 
-	n = clen = ndate = 0;
+	clen = ndate = nsub = nextra = 0;
 	rtype = RTmovie;
-	datel = nil;
+	datel = subl = extral = nil;
+	episodel = nil;
+	nepisode = nil;
 	memset(auxpath, 0, sizeof auxpath);
 	title = strrchr(path, '/');
 	if(*++title == 0)
@@ -518,6 +538,7 @@ sendportal(char *path)
 	f = fopen(auxpath, "r");
 	if(f == nil){
 		//hfatal("sendportal: fopen");
+		/* this is temporary. if there's no release there's no movie. */
 		sendlist(path);
 		exit(0);
 	}
@@ -529,22 +550,77 @@ sendportal(char *path)
 				date[(n--)-1] = 0;
 			datel[ndate-1] = strdup(date);
 			snprintf(season, sizeof(season)-1, "%d", ndate);
-			season[strlen(season)] = 0;
 			clen += 4+7+strlen(season)+4+n+6;
 		}
 		clen += 5;
 	}else{
 		n = getline(&date, &linelen, f);
-		datel = malloc(++ndate*sizeof(char *));
+		datel = malloc(sizeof(char *));
 		if(date[n-1] == '\n')
 			date[(n--)-1] = 0;
-		datel[ndate-1] = strdup(date);
+		datel[0] = strdup(date);
 		clen += n;
 	}
 	fclose(f);
+	if(rtype == RTseries){
+		clen += 5;
+		for(i = 0; i < ndate; i++){
+			snprintf(auxpath, sizeof(auxpath)-1, "%s/s/%d", path, i+1);
+			d = opendir(auxpath);
+			if(d == nil)
+				hfatal("sendportal: opendir");
+			clen += 5;
+			nepisode = erealloc(nepisode, (i+1)*sizeof(int));
+			nepisode[i] = 0;
+			episodel = erealloc(episodel, (i+1)*sizeof(char **));
+			episodel[i] = nil;
+			snprintf(season, sizeof(season)-1, "%d", i+1);
+			clen += 4+7+strlen(season)+6;
+			while((dir = readdir(d)) != nil)
+				if(strcmp(dir->d_name, ".") != 0 &&
+				   strcmp(dir->d_name, "..") != 0){
+					episodel[i] = erealloc(episodel[i], ++nepisode[i]*sizeof(char *));
+					episodel[i][nepisode[i]-1] = strdup(dir->d_name);
+					clen += 4+21+8+strlen(req->target)+strlen(season)+2*strlen(dir->d_name)+4+6;
+				}
+			qsort(episodel[i], nepisode[i], sizeof(char *), numcmp);
+			clen += 5;
+			closedir(d);
+		}
+		clen += 5;
+	}
+	snprintf(auxpath, sizeof(auxpath)-1, "%s/%s", path, "sub");
+	d = opendir(auxpath);
+	if(d != nil){
+		clen += 5;
+		while((dir = readdir(d)) != nil)
+			if(strcmp(dir->d_name, ".") != 0 &&
+			   strcmp(dir->d_name, "..") != 0){
+				subl = erealloc(subl, ++nsub*sizeof(char *));
+				subl[nsub-1] = strdup(dir->d_name);
+				clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+4+6;
+			}
+		clen += 5;
+		closedir(d);
+	}
+	snprintf(auxpath, sizeof(auxpath)-1, "%s/%s", path, "extra");
+	d = opendir(auxpath);
+	if(d != nil){
+		clen += 5;
+		while((dir = readdir(d)) != nil)
+			if(strcmp(dir->d_name, ".") != 0 &&
+			   strcmp(dir->d_name, "..") != 0){
+				extral = erealloc(extral, ++nextra*sizeof(char *));
+				extral[nextra-1] = strdup(dir->d_name);
+				clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+4+6;
+			}
+		clen += 5;
+		closedir(d);
+	}
 	clen += truestrlen(portalhead) + 2*strlen(title);
 	clen += truestrlen(portalcover) + 2*strlen(req->target) +
-		truestrlen(portalrelease) + truestrlen(portalstream) + strlen(req->target);
+		truestrlen(portalrelease) + (rtype == RTseries ? truestrlen(portalseriestream) : truestrlen(portalmoviestream)) + strlen(req->target);
+	clen += truestrlen(portalsub) + truestrlen(portaldub) + truestrlen(portalextra);
 	clen += truestrlen(portalfeet);
 	snprintf(clstr, sizeof clstr, "%llu", clen);
 	res = allocres(Sok);
@@ -562,9 +638,38 @@ sendportal(char *path)
 			printf("<li>Season %d on %s</li>\n", i+1, datel[i]);
 		printf("</ul>");
 	}else
-		for(i = 0; i < ndate; i++)
-			fwrite(datel[i], 1, strlen(datel[i]), stdout);
-	printf(portalstream, req->target);
+		fwrite(datel[0], 1, strlen(datel[0]), stdout);
+	if(rtype == RTseries){
+		printf(portalseriestream);
+		printf("<ul>\n");
+		for(i = 0; i < ndate; i++){
+			printf("<li>Season %d", i+1);
+			printf("<ul>\n");
+			for(j = 0; j < nepisode[i]; j++)
+				printf("<li><a href=\"%s/s/%d/%s/video\">Episode %s</a></li>\n",
+					req->target, i+1, episodel[i][j], episodel[i][j]);
+			printf("</ul></li>\n");
+		}
+		printf("</ul>");
+	}else
+		printf(portalmoviestream, req->target);
+	if(nsub > 0){
+		printf(portalsub);
+		printf("<ul>\n");
+		for(i = 0; i < nsub; i++)
+			printf("<li><a href=\"%s/sub/%s\">%s</a></li>\n",
+				req->target, subl[i], subl[i]);
+		printf("</ul>");
+	}
+	//printf(portaldub);
+	if(nextra > 0){
+		printf(portalextra);
+		printf("<ul>\n");
+		for(i = 0; i < nextra; i++)
+			printf("<li><a href=\"%s/sub/%s\">%s</a></li>\n",
+				req->target, extral[i], extral[i]);
+		printf("</ul>");
+	}
 	printf(portalfeet);
 	hprint("");
 }
