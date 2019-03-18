@@ -76,7 +76,7 @@ char listfeet[] = "</body>\n</html>\n";
 char portalhead[] = "<!doctype html>\n<html>\n<head>\n"
 	"<link rel=\"stylesheet\" href=\"/style\" media=\"all\" type=\"text/css\"/>\n"
 	"<title>Filmoteca - %s</title>\n"
-	"</head>\n<body>\n"
+	"</head>\n<body>\n<center>\n"
 	"<h1>%s</h1>\n";
 char portalcover[] = "<a href=\"%s/cover\"><img id=\"cover\" src=\"%s/cover\"/></a>\n";
 char portalrelease[] = "<table>\n"
@@ -102,7 +102,7 @@ char portalextra[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
 	"\t\t<td>Extras</td><td>";
-char portalfeet[] = "</td>\n\t</tr>\n</table>\n</body>\n</html>\n";
+char portalfeet[] = "</td>\n\t</tr>\n</table>\n</center></body>\n</html>\n";
 char stylepath[] = "/home/pi/lib/film/style.css";
 char fvicopath[] = "/home/pi/lib/film/favicon.ico";
 char wdir[] = "/home/pi/films";
@@ -152,10 +152,14 @@ truestrlen(char *s)
 
 	waste = 0;
 	for(e = s; *e != 0; e++)
-		if(*e == '%' && *(e+1) != '%'){
+		if(*e == '%'){
 			waste++;
+			if(*(e+1) == '%'){
+				e += 2;
+				continue;
+			}
 			/* rudimentary but works for me. */
-			while((isalnum(*++e) || *e == '.') && *e != 0)
+			while(isalnum(*++e) || *e == '.')
 				waste++;
 		}
 	return e-s-waste;
@@ -666,7 +670,7 @@ sendportal(char *path)
 		printf(portalextra);
 		printf("<ul>\n");
 		for(i = 0; i < nextra; i++)
-			printf("<li><a href=\"%s/sub/%s\">%s</a></li>\n",
+			printf("<li><a href=\"%s/extra/%s\">%s</a></li>\n",
 				req->target, extral[i], extral[i]);
 		printf("</ul>");
 	}

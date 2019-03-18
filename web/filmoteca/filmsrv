@@ -1,0 +1,2 @@
+#!/bin/sh
+/home/pi/bin/filmoteca 2>>/home/pi/lib/film/filmoteca.log
