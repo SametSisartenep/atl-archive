@@ -38,12 +38,87 @@ char *statusmsg[] = {
  [Swrongver]	"HTTP Version Not Supported",
 };
 
-/* not that sure about this. */
 enum {
-	RTmovie		= 0,
-	RTseries,
+	RTmovie,
 	RTmultipart,
+	RTseries,
 };
+
+//typedef struct Movie Movie;
+//typedef struct Multipart Multipart;
+//typedef struct Series Series;
+//typedef struct Season Season;
+//typedef struct Episode Episode;
+//typedef struct Resource Resource;
+//
+//struct Movie {
+//	char *release;		/* release date */
+//	int hassynopsis;	/* is there a synopsis, */
+//	int hascover;		/* cover, */
+//	int hasvideo;		/* video, */
+//	int hashistory;		/* or history file? */
+//	char **subs;		/* list of subtitle languages */
+//	int nsub;
+//	char **dubs;		/* list of revoicing languages */
+//	int ndub;
+//	char **extras;		/* list of extra content */
+//	int nextra;
+//	char **remakes;		/* list of remake years */
+//	int nremake;
+//};
+//
+//struct Multipart {
+//	char *release;		/* release date */
+//	int hassynopsis;	/* is there a synopsis, */
+//	int hascover;		/* cover, */
+//	int hashistory;		/* or history file? */
+//	int nvideo;		/* amount of parts */
+//	char ***subs;		/* list of subtitle languages, per part */
+//	int nsub;
+//	char ***dubs;		/* list of revoicing languages, per part */
+//	int ndub;
+//	char **extras;		/* list of extra content */
+//	int nextra;
+//	char **remakes;		/* list of remake years */
+//	int nremake;
+//};
+//
+//struct Series {
+//	int hassynopsis;	/* is there a synopsis, */
+//	int hascover;		/* cover, */
+//	int hashistory;		/* or history file? */
+//	Season *s;		/* list of seasons */
+//	char **extras;		/* list of extra content */
+//	int nextra;
+//	char **remakes;		/* list of remake years */
+//	int nremake;
+//};
+//
+//struct Season {
+//	char *release;		/* release date */
+//	int no;			/* season number */
+//	Episode *pilot;		/* list of episodes */
+//	Season *next;
+//};
+//
+//struct Episode {
+//	int no;			/* episode number */
+//	int hasvideo;		/* is there a video file? */
+//	char **subs;		/* list of subtitle languages */
+//	int nsub;
+//	char **dubs;		/* list of revoicing languages */
+//	int ndub;
+//	Episode *next;
+//};
+//
+//struct Resource {
+//	int type;
+//	union {
+//		Movie m;
+//		Multipart mp;
+//		Series s;
+//	} content;
+//};
 
 typedef struct Req Req;
 typedef struct Res Res;
@@ -106,8 +181,6 @@ char portalfeet[] = "</td>\n\t</tr>\n</table>\n</center></body>\n</html>\n";
 char stylepath[] = "/home/pi/lib/film/style.css";
 char fvicopath[] = "/home/pi/lib/film/favicon.ico";
 char wdir[] = "/home/pi/films";
-char **dirlist;
-int ndir;
 Req *req;
 Res *res;
 
@@ -178,6 +251,15 @@ numcmp(const void *a, const void *b)
 }
 
 int
+stringcmp(const void *a, const void *b)
+{
+	char **sa = (char **)a;
+	char **sb = (char **)b;
+
+	return strcmp(*sa, *sb);
+}
+
+int
 urldecode(char *url, char *out, long n)
 {
 	char *o, *ep;
@@ -225,9 +307,9 @@ mimetype(int fd, char *mime, long len)
 		if((n = read(pf[0], m, sizeof(m)-1)) < 0)
 			return -1;
 		close(pf[0]);
+		/* file(1) is not that good at guessing. */
 		if(strcmp(req->target, "/style") == 0)
 			strncpy(m, "text/css; charset=utf-8", sizeof(m)-1);
-		/* file(1) is not that good at guessing. */
 		if(strncmp(m, "audio", 5) == 0)
 			strncpy(m, "video", 5);
 		strncpy(mime, m, len);
@@ -417,9 +499,8 @@ sendfile(char *path, struct stat *fst)
 	f = fopen(path, "r");
 	if(f == nil)
 		hfatal("sendfile: fopen");
-	if(mimetype(fileno(f), mime, sizeof(mime)-1) < 0)
+	if(mimetype(fileno(f), mime, sizeof mime) < 0)
 		hfatal("sendfile: mimetype");
-	mime[strlen(mime)] = 0;
 	clen = fst->st_size;
 	if((s = lookuphdr(req->fields, "Range")) != nil){
 		while(!isdigit(*++s) && *s != 0)
@@ -472,11 +553,12 @@ sendlist(char *path)
 {
 	DIR *d;
 	struct dirent *dir;
-	char clstr[16];
+	char **dirlist, clstr[16];
 	uvlong clen;
-	int i;
+	int i, ndir;
 
-	clen = 0;
+	clen = ndir = 0;
+	dirlist = nil;
 	d = opendir(path);
 	if(d == nil)
 		hfatal("sendlist: opendir");
@@ -497,6 +579,7 @@ sendlist(char *path)
 	hprinthdr();
 	if(strcmp(req->method, "HEAD") == 0)
 		return;
+	qsort(dirlist, ndir, sizeof(char *), stringcmp);
 	printf(listhead);
 	printf("<ul>\n");
 	for(i = 0; i < ndir; i++)
@@ -538,11 +621,9 @@ sendportal(char *path)
 			break;
 		}
 	closedir(d);
-	snprintf(auxpath, sizeof(auxpath)-1, "%s/%s", path, "release");
+	snprintf(auxpath, sizeof auxpath, "%s/%s", path, "release");
 	f = fopen(auxpath, "r");
 	if(f == nil){
-		//hfatal("sendportal: fopen");
-		/* this is temporary. if there's no release there's no movie. */
 		sendlist(path);
 		exit(0);
 	}
@@ -553,8 +634,10 @@ sendportal(char *path)
 			if(date[n-1] == '\n')
 				date[(n--)-1] = 0;
 			datel[ndate-1] = strdup(date);
-			snprintf(season, sizeof(season)-1, "%d", ndate);
-			clen += 4+7+strlen(season)+4+n+6;
+			if(strcmp(date, "") != 0){
+				snprintf(season, sizeof season, "%d", ndate);
+				clen += 4+7+strlen(season)+4+n+6;
+			}
 		}
 		clen += 5;
 	}else{
@@ -569,7 +652,9 @@ sendportal(char *path)
 	if(rtype == RTseries){
 		clen += 5;
 		for(i = 0; i < ndate; i++){
-			snprintf(auxpath, sizeof(auxpath)-1, "%s/s/%d", path, i+1);
+			if(strcmp(datel[i], "") == 0)
+				continue;
+			snprintf(auxpath, sizeof auxpath, "%s/s/%d", path, i+1);
 			d = opendir(auxpath);
 			if(d == nil)
 				hfatal("sendportal: opendir");
@@ -578,7 +663,7 @@ sendportal(char *path)
 			nepisode[i] = 0;
 			episodel = erealloc(episodel, (i+1)*sizeof(char **));
 			episodel[i] = nil;
-			snprintf(season, sizeof(season)-1, "%d", i+1);
+			snprintf(season, sizeof season, "%d", i+1);
 			clen += 4+7+strlen(season)+6;
 			while((dir = readdir(d)) != nil)
 				if(strcmp(dir->d_name, ".") != 0 &&
@@ -593,7 +678,7 @@ sendportal(char *path)
 		}
 		clen += 5;
 	}
-	snprintf(auxpath, sizeof(auxpath)-1, "%s/%s", path, "sub");
+	snprintf(auxpath, sizeof auxpath, "%s/%s", path, "sub");
 	d = opendir(auxpath);
 	if(d != nil){
 		clen += 5;
@@ -607,7 +692,7 @@ sendportal(char *path)
 		clen += 5;
 		closedir(d);
 	}
-	snprintf(auxpath, sizeof(auxpath)-1, "%s/%s", path, "extra");
+	snprintf(auxpath, sizeof auxpath, "%s/%s", path, "extra");
 	d = opendir(auxpath);
 	if(d != nil){
 		clen += 5;
@@ -623,8 +708,13 @@ sendportal(char *path)
 	}
 	clen += truestrlen(portalhead) + 2*strlen(title);
 	clen += truestrlen(portalcover) + 2*strlen(req->target) +
-		truestrlen(portalrelease) + (rtype == RTseries ? truestrlen(portalseriestream) : truestrlen(portalmoviestream)) + strlen(req->target);
-	clen += truestrlen(portalsub) + truestrlen(portaldub) + truestrlen(portalextra);
+		truestrlen(portalrelease) + (rtype == RTseries ? truestrlen(portalseriestream) : truestrlen(portalmoviestream)+strlen(req->target));
+	if(nsub > 0)
+		clen += truestrlen(portalsub);
+	/*if(ndub > 0)
+		clen += truestrlen(portaldub);*/
+	if(nextra > 0)
+		clen += truestrlen(portalextra);
 	clen += truestrlen(portalfeet);
 	snprintf(clstr, sizeof clstr, "%llu", clen);
 	res = allocres(Sok);
@@ -638,8 +728,11 @@ sendportal(char *path)
 	printf(portalrelease);
 	if(rtype == RTseries){
 		printf("<ul>\n");
-		for(i = 0; i < ndate; i++)
+		for(i = 0; i < ndate; i++){
+			if(strcmp(datel[i], "") == 0)
+				continue;
 			printf("<li>Season %d on %s</li>\n", i+1, datel[i]);
+		}
 		printf("</ul>");
 	}else
 		fwrite(datel[0], 1, strlen(datel[0]), stdout);
@@ -647,6 +740,8 @@ sendportal(char *path)
 		printf(portalseriestream);
 		printf("<ul>\n");
 		for(i = 0; i < ndate; i++){
+			if(strcmp(datel[i], "") == 0)
+				continue;
 			printf("<li>Season %d", i+1);
 			printf("<ul>\n");
 			for(j = 0; j < nepisode[i]; j++)
@@ -695,7 +790,7 @@ main()
 	else if(strcmp(req->target, "/favicon.ico") == 0)
 		strncpy(path, fvicopath, sizeof(path)-1);
 	else
-		snprintf(path, sizeof(path)-1, "%s%s", wdir, req->target);
+		snprintf(path, sizeof path, "%s%s", wdir, req->target);
 	if(urldecode(path, path, strlen(path)) < 0)
 		hfail(Sbadreq);
 	if(stat(path, &fst) < 0)
@@ -706,8 +801,6 @@ main()
 		}
 	if(S_ISREG(fst.st_mode))
 		sendfile(path, &fst);
-	else if(strstr(req->target+1, "/") == nil)
-		sendlist(path);
 	else
 		sendportal(path);
 	exit(0);
