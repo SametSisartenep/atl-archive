@@ -1,9 +1,10 @@
 #define DEG 0.01745329251994330
+#define RAD (1/DEG)
 
 enum {
 	STACKSZ = 8192,
 	SEC = 1000,
-	THRUST = 200,
+	THRUST = 50,
 	FPS = 60
 };
 

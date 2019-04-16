@@ -11,6 +11,12 @@ Vec(double x, double y)
 }
 
 Vector
+Vpt(Point p)
+{
+	return (Vector){p.x, p.y};
+}
+
+Vector
 addvec(Vector v, Vector u)
 {
 	return (Vector){v.x+u.x, v.y+u.y};

@@ -5,6 +5,7 @@ void triangle(Image *, Triangle, int, Image *, Point);
 void filltriangle(Image *, Triangle, Image *, Point);
 Triangle rotatriangle(Triangle, double, Point);
 Vector Vec(double, double);
+Vector Vpt(Point);
 Vector addvec(Vector, Vector);
 Vector subvec(Vector, Vector);
 Vector mulvec(Vector, double);
