@@ -1,3 +1,8 @@
+/*
+ * filmoteca - web interface
+ *
+ * compile with: cc -o filmoteca -Wall -Wno-parentheses -Wno-missing-braces -Wno-pointer-to-int-cast -fno-diagnostics-show-caret -fno-diagnostics-color -static -O2 -D_FILE_OFFSET_BITS=64 filmoteca.c
+ */
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -38,87 +43,93 @@ char *statusmsg[] = {
  [Swrongver]	"HTTP Version Not Supported",
 };
 
-enum {
-	RTmovie,
-	RTmultipart,
-	RTseries,
+typedef struct Movie Movie;
+typedef struct Multipart Multipart;
+typedef struct Part Part;
+typedef struct Series Series;
+typedef struct Season Season;
+typedef struct Episode Episode;
+typedef struct Resource Resource;
+
+struct Movie {
+	char *release;		/* release date */
+	int hassynopsis;	/* is there a synopsis, */
+	int hascover;		/* cover, */
+	int hasvideo;		/* video, */
+	int hashistory;		/* or history file? */
+	char **subs;		/* list of subtitle languages */
+	int nsub;
+	char **dubs;		/* list of revoicing languages */
+	int ndub;
+	char **extras;		/* list of extra content */
+	int nextra;
+	char **remakes;		/* list of remake years */
+	int nremake;
 };
 
-//typedef struct Movie Movie;
-//typedef struct Multipart Multipart;
-//typedef struct Series Series;
-//typedef struct Season Season;
-//typedef struct Episode Episode;
-//typedef struct Resource Resource;
-//
-//struct Movie {
-//	char *release;		/* release date */
-//	int hassynopsis;	/* is there a synopsis, */
-//	int hascover;		/* cover, */
-//	int hasvideo;		/* video, */
-//	int hashistory;		/* or history file? */
-//	char **subs;		/* list of subtitle languages */
-//	int nsub;
-//	char **dubs;		/* list of revoicing languages */
-//	int ndub;
-//	char **extras;		/* list of extra content */
-//	int nextra;
-//	char **remakes;		/* list of remake years */
-//	int nremake;
-//};
-//
-//struct Multipart {
-//	char *release;		/* release date */
-//	int hassynopsis;	/* is there a synopsis, */
-//	int hascover;		/* cover, */
-//	int hashistory;		/* or history file? */
-//	int nvideo;		/* amount of parts */
-//	char ***subs;		/* list of subtitle languages, per part */
-//	int nsub;
-//	char ***dubs;		/* list of revoicing languages, per part */
-//	int ndub;
-//	char **extras;		/* list of extra content */
-//	int nextra;
-//	char **remakes;		/* list of remake years */
-//	int nremake;
-//};
-//
-//struct Series {
-//	int hassynopsis;	/* is there a synopsis, */
-//	int hascover;		/* cover, */
-//	int hashistory;		/* or history file? */
-//	Season *s;		/* list of seasons */
-//	char **extras;		/* list of extra content */
-//	int nextra;
-//	char **remakes;		/* list of remake years */
-//	int nremake;
-//};
-//
-//struct Season {
-//	char *release;		/* release date */
-//	int no;			/* season number */
-//	Episode *pilot;		/* list of episodes */
-//	Season *next;
-//};
-//
-//struct Episode {
-//	int no;			/* episode number */
-//	int hasvideo;		/* is there a video file? */
-//	char **subs;		/* list of subtitle languages */
-//	int nsub;
-//	char **dubs;		/* list of revoicing languages */
-//	int ndub;
-//	Episode *next;
-//};
-//
-//struct Resource {
-//	int type;
-//	union {
-//		Movie m;
-//		Multipart mp;
-//		Series s;
-//	} content;
-//};
+struct Multipart {
+	char *release;		/* release date */
+	int hassynopsis;	/* is there a synopsis, */
+	int hascover;		/* cover, */
+	int hashistory;		/* or history file? */
+	Part *part0;		/* list of parts */
+	char **extras;		/* list of extra content */
+	int nextra;
+	char **remakes;		/* list of remake years */
+	int nremake;
+};
+
+struct Part {
+	int no;			/* part number */
+	char **subs;		/* list of subtitle languages */
+	int nsub;
+	char **dubs;		/* list of revoicing languages */
+	int ndub;
+	Part *next;
+};
+
+struct Series {
+	int hassynopsis;	/* is there a synopsis, */
+	int hascover;		/* cover, */
+	int hashistory;		/* or history file? */
+	Season *s;		/* list of seasons */
+	char **extras;		/* list of extra content */
+	int nextra;
+	char **remakes;		/* list of remake years */
+	int nremake;
+};
+
+struct Season {
+	char *release;		/* release date */
+	int no;			/* season number */
+	Episode *pilot;		/* list of episodes */
+	Season *next;
+};
+
+struct Episode {
+	int no;			/* episode number */
+	int hasvideo;		/* is there a video file? */
+	char **subs;		/* list of subtitle languages */
+	int nsub;
+	char **dubs;		/* list of revoicing languages */
+	int ndub;
+	Episode *next;
+};
+
+enum {
+	Rmovie,
+	Rmulti,
+	Rserie,
+	Runknown
+};
+struct Resource {
+	int type;
+	union {
+		Movie movie;
+		Multipart multi;
+		Series serie;
+	};
+};
 
 typedef struct Req Req;
 typedef struct Res Res;
@@ -161,10 +172,22 @@ char portalmoviestream[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
 	"\t\t<td>Stream</td><td><a href=\"%s/video\">link</a>";
+char portalmultistream[] = "</td>\n"
+	"\t</tr>\n"
+	"\t<tr>\n"
+	"\t\t<td>Stream</td><td>";
 char portalseriestream[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
 	"\t\t<td>Stream</td><td>";
+char portalsynopsis[] = "</td>\n"
+	"\t</tr>\n"
+	"\t<tr>\n"
+	"\t\t<td>Synopsis</td><td>";
+char portalhistory[] = "</td>\n"
+	"\t</tr>\n"
+	"\t<tr>\n"
+	"\t\t<td>History</td><td>";
 char portalsub[] = "</td>\n"
 	"\t</tr>\n"
 	"\t<tr>\n"
@@ -195,7 +218,7 @@ sysfatal(char *s)
 }
 
 void *
-emalloc(long n)
+emalloc(ulong n)
 {
 	void *p;
 
@@ -207,7 +230,7 @@ emalloc(long n)
 }
 
 void *
-erealloc(void *ptr, long n)
+erealloc(void *ptr, ulong n)
 {
 	void *p;
 
@@ -316,6 +339,44 @@ mimetype(int fd, char *mime, long len)
 		wait(nil);
 	}
 	return 0;
+}
+
+int
+filldirlist(char *path, char ***l, int *len)
+{
+	DIR *d;
+	struct dirent *dir;
+
+	d = opendir(path);
+	if(d == nil)
+		return -1;
+	while((dir = readdir(d)) != nil)
+		if(strcmp(dir->d_name, ".") != 0 &&
+		   strcmp(dir->d_name, "..") != 0){
+			*l = erealloc(*l, ++*len*sizeof(char *));
+			(*l)[*len-1] = strdup(dir->d_name);
+		}
+	closedir(d);
+	return 0;
+}
+
+void
+insertepisode(Season *s, Episode *e, int no)
+{
+	Episode *ep, *olde;
+
+	olde = nil;
+	if(s->pilot == nil){
+		s->pilot = e;
+		return;
+	}
+	for(ep = s->pilot; ep != nil && ep->no < e->no; olde = ep, ep = ep->next)
+		;
+	if(olde == nil)
+		s->pilot = e;
+	else
+		olde->next = e;
+	e->next = ep;
 }
 
 HField *
@@ -489,16 +550,12 @@ hparsereq(void)
 }
 
 void
-sendfile(char *path, struct stat *fst)
+sendfile(FILE *f, struct stat *fst)
 {
-	FILE *f;
-	char buf[64*1024], mime[256], *s, crstr[6+3*16+1+1+1], clstr[16];
+	char buf[128*1024], mime[256], *s, crstr[6+3*16+1+1+1], clstr[16];
 	uvlong brange[2], n, clen;
 
 	n = clen = 0;
-	f = fopen(path, "r");
-	if(f == nil)
-		hfatal("sendfile: fopen");
 	if(mimetype(fileno(f), mime, sizeof mime) < 0)
 		hfatal("sendfile: mimetype");
 	clen = fst->st_size;
@@ -536,7 +593,7 @@ sendfile(char *path, struct stat *fst)
 		inserthdr(&res->fields, "Connection", s);
 	hprinthdr();
 	if(strcmp(req->method, "HEAD") == 0)
-		goto EOT;
+		return;
 	while(clen -= n, !feof(f) && clen > 0){
 		n = fread(buf, 1, sizeof buf, f);
 		if(ferror(f))
@@ -544,238 +601,471 @@ sendfile(char *path, struct stat *fst)
 		if(fwrite(buf, 1, n, stdout) <= 0)
 			break;
 	}
-EOT:
-	fclose(f);
 }
 
 void
 sendlist(char *path)
 {
-	DIR *d;
-	struct dirent *dir;
-	char **dirlist, clstr[16];
-	uvlong clen;
+	FILE *f;
+	struct stat fst;
+	char **dirlist;
 	int i, ndir;
 
-	clen = ndir = 0;
+	ndir = 0;
 	dirlist = nil;
-	d = opendir(path);
-	if(d == nil)
-		hfatal("sendlist: opendir");
-	clen += truestrlen(listhead)+5;
-	while((dir = readdir(d)) != nil)
-		if(strcmp(dir->d_name, ".") != 0 &&
-		   strcmp(dir->d_name, "..") != 0){
-			dirlist = erealloc(dirlist, ++ndir*sizeof(char *));
-			dirlist[ndir-1] = strdup(dir->d_name);
-			clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+5+1;
-		}
-	closedir(d);
-	clen += 6+truestrlen(listfeet);
-	snprintf(clstr, sizeof clstr, "%llu", clen);
-	res = allocres(Sok);
-	inserthdr(&res->fields, "Content-Type", "text/html; charset=utf-8");
-	inserthdr(&res->fields, "Content-Length", clstr);
-	hprinthdr();
-	if(strcmp(req->method, "HEAD") == 0)
-		return;
+	f = tmpfile();
+	if(f == nil)
+		hfatal("sendlist: tmpfile");
+	filldirlist(path, &dirlist, &ndir);
 	qsort(dirlist, ndir, sizeof(char *), stringcmp);
-	printf(listhead);
-	printf("<ul>\n");
+	fprintf(f, listhead);
+	fprintf(f, "<ul>\n");
 	for(i = 0; i < ndir; i++)
-		printf("<li><a href=\"%s/%s\">%s</a></li>\n",
+		fprintf(f, "<li><a href=\"%s/%s\">%s</a></li>\n",
 			strcmp(req->target, "/") == 0 ? "" : req->target,
 			dirlist[i], dirlist[i]);
-	printf("</ul>\n");
-	printf(listfeet);
-	hprint("");
+	fprintf(f, "</ul>\n");
+	fprintf(f, listfeet);
+	fseeko(f, 0, SEEK_SET);
+	if(fstat(fileno(f), &fst) < 0)
+		switch(errno){
+		case EACCES: hfail(Sforbid);
+		case ENOENT: hfail(Snotfound);
+		default: hfatal("sendlist: fstat");
+		}
+	sendfile(f, &fst);
+	fclose(f);
 }
 
 void
 sendportal(char *path)
 {
-	FILE *f;
-	DIR *d;
-	struct dirent *dir;
-	char *title, auxpath[512], *date, season[5], clstr[16];
-	char **datel, ***episodel, **subl, **extral;
-	uvlong clen;
+	Resource r;
+	Part *p;
+	Season *s;
+	Episode *e;
+	FILE *f, *auxf;
+	struct stat fst;
+	DIR *root, *d, *ed;
+	struct dirent *rdir, *dir, *edir;
+	char *title, *line, auxpath[512], buf[1024];
 	uint linelen;
-	int rtype, n, ndate, *nepisode, nsub, nextra, i, j;
+	int n, sno, canintrosubs, canintrodubs, canintroseason;
 
-	clen = ndate = nsub = nextra = 0;
-	rtype = RTmovie;
-	datel = subl = extral = nil;
-	episodel = nil;
-	nepisode = nil;
+	p = nil;
+	s = nil;
+	e = nil;
+	sno = 0;
+	memset(&r, 0, sizeof(Resource));
+	r.type = Runknown;
 	memset(auxpath, 0, sizeof auxpath);
 	title = strrchr(path, '/');
 	if(*++title == 0)
 		hfail(Sbadreq);
-	d = opendir(path);
-	if(d == nil)
+	root = opendir(path);
+	if(root == nil)
 		hfatal("sendportal: opendir");
-	while((dir = readdir(d)) != nil)
-		if(strcmp(dir->d_name, "s") == 0){
-			rtype = RTseries;
-			break;
+	while((rdir = readdir(root)) != nil){
+		switch(r.type){
+		case Runknown: break;
+		case Rmovie:
+			if(strcmp(rdir->d_name, "release") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				f = fopen(auxpath, "r");
+				if(f == nil)
+					goto Rogue;
+				n = getline(&line, &linelen, f);
+				if(line[n-1] == '\n')
+					line[(n--)-1] = 0;
+				r.movie.release = strdup(line);
+				fclose(f);
+			}else if(strcmp(rdir->d_name, "synopsis") == 0)
+				r.movie.hassynopsis++;
+			else if(strcmp(rdir->d_name, "cover") == 0)
+				r.movie.hascover++;
+			else if(strcmp(rdir->d_name, "video") == 0)
+				r.movie.hasvideo++;
+			else if(strcmp(rdir->d_name, "history") == 0)
+				r.movie.hashistory++;
+			else if(strcmp(rdir->d_name, "sub") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.movie.subs, &r.movie.nsub);
+			}else if(strcmp(rdir->d_name, "dub") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.movie.dubs, &r.movie.ndub);
+			}else if(strcmp(rdir->d_name, "extra") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.movie.extras, &r.movie.nextra);
+			}else if(strcmp(rdir->d_name, "remake") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.movie.remakes, &r.movie.nremake);
+			}
+			continue;
+		case Rmulti:
+			if(strcmp(rdir->d_name, "release") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				f = fopen(auxpath, "r");
+				if(f == nil)
+					goto Rogue;
+				n = getline(&line, &linelen, f);
+				if(line[n-1] == '\n')
+					line[(n--)-1] = 0;
+				r.multi.release = strdup(line);
+				fclose(f);
+			}else if(strcmp(rdir->d_name, "synopsis") == 0)
+				r.multi.hassynopsis++;
+			else if(strcmp(rdir->d_name, "cover") == 0)
+				r.multi.hascover++;
+			else if(strcmp(rdir->d_name, "history") == 0)
+				r.multi.hashistory++;
+			else if(strncmp(rdir->d_name, "video", 5) == 0){
+				if(p == nil){
+					r.multi.part0 = emalloc(sizeof(Part));
+					p = r.multi.part0;
+				}else{
+					p->next = emalloc(sizeof(Part));
+					p = p->next;
+				}
+				p->no = strtol(rdir->d_name+5, nil, 0);
+				snprintf(auxpath, sizeof auxpath, "%s/sub%d", path, p->no);
+				filldirlist(auxpath, &p->subs, &p->nsub);
+				snprintf(auxpath, sizeof auxpath, "%s/dub%d", path, p->no);
+				filldirlist(auxpath, &p->dubs, &p->ndub);
+			}else if(strcmp(rdir->d_name, "extra") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.multi.extras, &r.multi.nextra);
+			}else if(strcmp(rdir->d_name, "remake") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.multi.remakes, &r.multi.nremake);
+			}
+			continue;
+		case Rserie:
+			if(strcmp(rdir->d_name, "synopsis") == 0)
+				r.serie.hassynopsis++;
+			else if(strcmp(rdir->d_name, "cover") == 0)
+				r.serie.hascover++;
+			else if(strcmp(rdir->d_name, "history") == 0)
+				r.serie.hashistory++;
+			else if(strcmp(rdir->d_name, "release") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				f = fopen(auxpath, "r");
+				if(f == nil)
+					goto Rogue;
+				while((n = getline(&line, &linelen, f)) > 0){
+					sno++;
+					if(line[n-1] == '\n')
+						line[(n--)-1] = 0;
+					if(!isdigit(*line))
+						continue;
+					if(s == nil){
+						r.serie.s = emalloc(sizeof(Season));
+						s = r.serie.s;
+					}else{
+						s->next = emalloc(sizeof(Season));
+						s = s->next;
+					}
+					s->release = strdup(line);
+					s->no = sno;
+					e = nil;
+					snprintf(auxpath, sizeof auxpath, "%s/s/%d", path, s->no);
+					d = opendir(auxpath);
+					if(d == nil)
+						goto Rogue;
+					while((dir = readdir(d)) != nil){
+						if(!isdigit(dir->d_name[0]))
+							continue;
+						e = emalloc(sizeof(Episode));
+						e->no = strtol(dir->d_name, nil, 0);
+						insertepisode(s, e, e->no);
+						snprintf(auxpath, sizeof auxpath, "%s/s/%d/%d", path, s->no, e->no);
+						ed = opendir(auxpath);
+						if(ed == nil)
+							goto Rogue;
+						while((edir = readdir(ed)) != nil){
+							if(strcmp(edir->d_name, "video") == 0)
+								e->hasvideo++;
+							else if(strcmp(edir->d_name, "sub") == 0){
+								snprintf(auxpath, sizeof auxpath, "%s/s/%d/%d/%s", path, s->no, e->no, edir->d_name);
+								filldirlist(auxpath, &e->subs, &e->nsub);
+							}else if(strcmp(edir->d_name, "dub") == 0){
+								snprintf(auxpath, sizeof auxpath, "%s/s/%d/%d/%s", path, s->no, e->no, edir->d_name);
+								filldirlist(auxpath, &e->dubs, &e->ndub);
+							}
+						}
+						closedir(ed);
+					}
+					closedir(d);
+				}
+				fclose(f);
+			}else if(strcmp(rdir->d_name, "extra") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.serie.extras, &r.serie.nextra);
+			}else if(strcmp(rdir->d_name, "remake") == 0){
+				snprintf(auxpath, sizeof auxpath, "%s/%s", path, rdir->d_name);
+				filldirlist(auxpath, &r.serie.remakes, &r.serie.nremake);
+			}
+			continue;
 		}
-	closedir(d);
-	snprintf(auxpath, sizeof auxpath, "%s/%s", path, "release");
-	f = fopen(auxpath, "r");
-	if(f == nil){
+		if(strcmp(rdir->d_name, "video") == 0)
+			r.type = Rmovie;
+		else if(strcmp(rdir->d_name, "video1") == 0)
+			r.type = Rmulti;
+		else if(strcmp(rdir->d_name, "s") == 0)
+			r.type = Rserie;
+		if(r.type != Runknown)
+			rewinddir(root);
+	}
+	closedir(root);
+	if(r.type == Runknown){
+Rogue:
 		sendlist(path);
 		exit(0);
 	}
-	if(rtype == RTseries){
-		clen += 5;
-		while((n = getline(&date, &linelen, f)) > 0){
-			datel = erealloc(datel, ++ndate*sizeof(char *));
-			if(date[n-1] == '\n')
-				date[(n--)-1] = 0;
-			datel[ndate-1] = strdup(date);
-			if(strcmp(date, "") != 0){
-				snprintf(season, sizeof season, "%d", ndate);
-				clen += 4+7+strlen(season)+4+n+6;
+	f = tmpfile();
+	if(f == nil)
+		hfatal("sendportal: tmpfile");
+	fprintf(f, portalhead, title, title);
+	switch(r.type){
+	case Rmovie:
+		if(r.movie.hascover)
+			fprintf(f, portalcover, req->target, req->target);
+		fprintf(f, portalrelease);
+		fwrite(r.movie.release, 1, strlen(r.movie.release), f);
+		fprintf(f, portalmoviestream, req->target);
+		if(r.movie.hassynopsis){
+			fprintf(f, portalsynopsis);
+			snprintf(auxpath, sizeof auxpath, "%s/synopsis", path);
+			auxf = fopen(auxpath, "r");
+			if(auxf == nil)
+				break;
+			while(!feof(auxf)){
+				n = fread(buf, 1, sizeof buf, auxf);
+				if(ferror(auxf))
+					break;
+				if(fwrite(buf, 1, n, f) <= 0)
+					break;
 			}
+			fclose(auxf);
 		}
-		clen += 5;
-	}else{
-		n = getline(&date, &linelen, f);
-		datel = malloc(sizeof(char *));
-		if(date[n-1] == '\n')
-			date[(n--)-1] = 0;
-		datel[0] = strdup(date);
-		clen += n;
-	}
-	fclose(f);
-	if(rtype == RTseries){
-		clen += 5;
-		for(i = 0; i < ndate; i++){
-			if(strcmp(datel[i], "") == 0)
-				continue;
-			snprintf(auxpath, sizeof auxpath, "%s/s/%d", path, i+1);
-			d = opendir(auxpath);
-			if(d == nil)
-				hfatal("sendportal: opendir");
-			clen += 5;
-			nepisode = erealloc(nepisode, (i+1)*sizeof(int));
-			nepisode[i] = 0;
-			episodel = erealloc(episodel, (i+1)*sizeof(char **));
-			episodel[i] = nil;
-			snprintf(season, sizeof season, "%d", i+1);
-			clen += 4+7+strlen(season)+6;
-			while((dir = readdir(d)) != nil)
-				if(strcmp(dir->d_name, ".") != 0 &&
-				   strcmp(dir->d_name, "..") != 0){
-					episodel[i] = erealloc(episodel[i], ++nepisode[i]*sizeof(char *));
-					episodel[i][nepisode[i]-1] = strdup(dir->d_name);
-					clen += 4+21+8+strlen(req->target)+strlen(season)+2*strlen(dir->d_name)+4+6;
+		if(r.movie.hashistory){
+			fprintf(f, portalhistory);
+			snprintf(auxpath, sizeof auxpath, "%s/history", path);
+			auxf = fopen(auxpath, "r");
+			if(auxf == nil)
+				break;
+			while(!feof(auxf)){
+				n = fread(buf, 1, sizeof buf, auxf);
+				if(ferror(auxf))
+					break;
+				if(fwrite(buf, 1, n, f) <= 0)
+					break;
+			}
+			fclose(auxf);
+		}
+		if(r.movie.nsub > 0){
+			fprintf(f, portalsub);
+			fprintf(f, "<ul>\n");
+			for(; r.movie.nsub--; r.movie.subs++)
+				fprintf(f, "<li><a href=\"%s/sub/%s\">%s</a></li>\n", req->target, *r.movie.subs, *r.movie.subs);
+			fprintf(f, "</ul>");
+		}
+		if(r.movie.ndub > 0){
+			fprintf(f, portaldub);
+			fprintf(f, "<ul>\n");
+			for(; r.movie.ndub--; r.movie.dubs++)
+				fprintf(f, "<li><a href=\"%s/dub/%s\">%s</a></li>\n", req->target, *r.movie.dubs, *r.movie.dubs);
+			fprintf(f, "</ul>");
+		}
+		if(r.movie.nextra > 0){
+			fprintf(f, portalextra);
+			fprintf(f, "<ul>\n");
+			for(; r.movie.nextra--; r.movie.extras++)
+				fprintf(f, "<li><a href=\"%s/extra/%s\">%s</a></li>\n", req->target, *r.movie.extras, *r.movie.extras);
+			fprintf(f, "</ul>");
+		}
+		break;
+	case Rmulti:
+		if(r.multi.hascover)
+			fprintf(f, portalcover, req->target, req->target);
+		fprintf(f, portalrelease);
+		fwrite(r.multi.release, 1, strlen(r.multi.release), f);
+		fprintf(f, portalmultistream, req->target);
+		fprintf(f, "<ul>\n");
+		for(p = r.multi.part0; p != nil; p = p->next)
+			fprintf(f, "<li><a href=\"%s/video%d\">Part %d</a></li>\n", req->target, p->no, p->no);
+		fprintf(f, "</ul>");
+		if(r.multi.hassynopsis){
+			fprintf(f, portalsynopsis);
+			snprintf(auxpath, sizeof auxpath, "%s/synopsis", path);
+			auxf = fopen(auxpath, "r");
+			if(auxf == nil)
+				break;
+			while(!feof(auxf)){
+				n = fread(buf, 1, sizeof buf, auxf);
+				if(ferror(auxf))
+					break;
+				if(fwrite(buf, 1, n, f) <= 0)
+					break;
+			}
+			fclose(auxf);
+		}
+		if(r.multi.hashistory){
+			fprintf(f, portalhistory);
+			snprintf(auxpath, sizeof auxpath, "%s/history", path);
+			auxf = fopen(auxpath, "r");
+			if(auxf == nil)
+				break;
+			while(!feof(auxf)){
+				n = fread(buf, 1, sizeof buf, auxf);
+				if(ferror(auxf))
+					break;
+				if(fwrite(buf, 1, n, f) <= 0)
+					break;
+			}
+			fclose(auxf);
+		}
+		canintrosubs = canintrodubs = 1;
+		for(p = r.multi.part0; p != nil; p = p->next)
+			if(p->nsub > 0){
+				if(canintrosubs)
+					fprintf(f, portalsub), canintrosubs--;
+				fprintf(f, "<ul><li>Part %d", p->no);
+				fprintf(f, "<ul>\n");
+				for(; p->nsub--; p->subs++)
+					fprintf(f, "<li><a href=\"%s/sub%d/%s\">%s</a></li>\n", req->target, p->no, *p->subs, *p->subs);
+				fprintf(f, "</ul></li></ul>\n");
+			}
+		for(p = r.multi.part0; p != nil; p = p->next)
+			if(p->ndub > 0){
+				if(canintrodubs)
+					fprintf(f, portaldub), canintrodubs--;
+				fprintf(f, "<ul><li>Part %d", p->no);
+				fprintf(f, "<ul>\n");
+				for(; p->ndub--; p->dubs++)
+					fprintf(f, "<li><a href=\"%s/dub%d/%s\">%s</a></li>\n", req->target, p->no, *p->dubs, *p->dubs);
+				fprintf(f, "</ul></li></ul>\n");
+			}
+		if(r.movie.nextra > 0){
+			fprintf(f, portalextra);
+			fprintf(f, "<ul>\n");
+			for(; r.movie.nextra--; r.movie.extras++)
+				fprintf(f, "<li><a href=\"%s/extra/%s\">%s</a></li>\n", req->target, *r.movie.extras, *r.movie.extras);
+			fprintf(f, "</ul>");
+		}
+		break;
+	case Rserie:
+		if(r.serie.hascover)
+			fprintf(f, portalcover, req->target, req->target);
+		fprintf(f, portalrelease);
+		fprintf(f, "<ul>\n");
+		for(s = r.serie.s; s != nil; s = s->next)
+			fprintf(f, "<li>Season %d on %s</li>\n", s->no, s->release);
+		fprintf(f, "</ul>");
+		fprintf(f, portalseriestream);
+		fprintf(f, "<ul>\n");
+		for(s = r.serie.s; s != nil; s = s->next){
+			fprintf(f, "<li>Season %d", s->no);
+			fprintf(f, "<ul>\n");
+			for(e = s->pilot; e != nil; e = e->next)
+				if(e->hasvideo)
+					fprintf(f, "<li><a href=\"%s/s/%d/%d/video\">Episode %d</a></li>\n",
+						req->target, s->no, e->no, e->no);
+				else
+					fprintf(f, "<li>Episode %d is unavailable</li>\n", e->no);
+			fprintf(f, "</ul></li>\n");
+		}
+		fprintf(f, "</ul>");
+		if(r.serie.hassynopsis){
+			fprintf(f, portalsynopsis);
+			snprintf(auxpath, sizeof auxpath, "%s/synopsis", path);
+			auxf = fopen(auxpath, "r");
+			if(auxf == nil)
+				break;
+			while(!feof(auxf)){
+				n = fread(buf, 1, sizeof buf, auxf);
+				if(ferror(auxf))
+					break;
+				if(fwrite(buf, 1, n, f) <= 0)
+					break;
+			}
+			fclose(auxf);
+		}
+		if(r.serie.hashistory){
+			fprintf(f, portalhistory);
+			snprintf(auxpath, sizeof auxpath, "%s/history", path);
+			auxf = fopen(auxpath, "r");
+			if(auxf == nil)
+				break;
+			while(!feof(auxf)){
+				n = fread(buf, 1, sizeof buf, auxf);
+				if(ferror(auxf))
+					break;
+				if(fwrite(buf, 1, n, f) <= 0)
+					break;
+			}
+			fclose(auxf);
+		}
+		canintrosubs = canintrodubs = 1;
+		for(s = r.serie.s; s != nil; s = s->next){
+			canintroseason = 1;
+			for(e = s->pilot; e != nil; e = e->next)
+				if(e->nsub > 0){
+					if(canintrosubs)
+						fprintf(f, portalsub), canintrosubs--;
+					if(canintroseason)
+						fprintf(f, "<ul><li>Season %d", s->no), canintroseason--;
+					fprintf(f, "<ul>\n");
+					for(; e->nsub--; e->subs++)
+						fprintf(f, "<li>Episode %d: <a href=\"%s/s/%d/%d/sub/%s\">%s</a></li>\n",
+							e->no, req->target, s->no, e->no, *e->subs, *e->subs);
+					fprintf(f, "</ul>");
 				}
-			qsort(episodel[i], nepisode[i], sizeof(char *), numcmp);
-			clen += 5;
-			closedir(d);
+			if(!canintroseason)
+				fprintf(f, "</li></ul>\n");
 		}
-		clen += 5;
-	}
-	snprintf(auxpath, sizeof auxpath, "%s/%s", path, "sub");
-	d = opendir(auxpath);
-	if(d != nil){
-		clen += 5;
-		while((dir = readdir(d)) != nil)
-			if(strcmp(dir->d_name, ".") != 0 &&
-			   strcmp(dir->d_name, "..") != 0){
-				subl = erealloc(subl, ++nsub*sizeof(char *));
-				subl[nsub-1] = strdup(dir->d_name);
-				clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+4+6;
-			}
-		clen += 5;
-		closedir(d);
-	}
-	snprintf(auxpath, sizeof auxpath, "%s/%s", path, "extra");
-	d = opendir(auxpath);
-	if(d != nil){
-		clen += 5;
-		while((dir = readdir(d)) != nil)
-			if(strcmp(dir->d_name, ".") != 0 &&
-			   strcmp(dir->d_name, "..") != 0){
-				extral = erealloc(extral, ++nextra*sizeof(char *));
-				extral[nextra-1] = strdup(dir->d_name);
-				clen += 4+16+strlen(req->target)+2*strlen(dir->d_name)+4+6;
-			}
-		clen += 5;
-		closedir(d);
-	}
-	clen += truestrlen(portalhead) + 2*strlen(title);
-	clen += truestrlen(portalcover) + 2*strlen(req->target) +
-		truestrlen(portalrelease) + (rtype == RTseries ? truestrlen(portalseriestream) : truestrlen(portalmoviestream)+strlen(req->target));
-	if(nsub > 0)
-		clen += truestrlen(portalsub);
-	/*if(ndub > 0)
-		clen += truestrlen(portaldub);*/
-	if(nextra > 0)
-		clen += truestrlen(portalextra);
-	clen += truestrlen(portalfeet);
-	snprintf(clstr, sizeof clstr, "%llu", clen);
-	res = allocres(Sok);
-	inserthdr(&res->fields, "Content-Type", "text/html; charset=utf-8");
-	inserthdr(&res->fields, "Content-Length", clstr);
-	hprinthdr();
-	if(strcmp(req->method, "HEAD") == 0)
-		return;
-	printf(portalhead, title, title);
-	printf(portalcover, req->target, req->target);
-	printf(portalrelease);
-	if(rtype == RTseries){
-		printf("<ul>\n");
-		for(i = 0; i < ndate; i++){
-			if(strcmp(datel[i], "") == 0)
-				continue;
-			printf("<li>Season %d on %s</li>\n", i+1, datel[i]);
+		for(s = r.serie.s; s != nil; s = s->next){
+			canintroseason = 1;
+			for(e = s->pilot; e != nil; e = e->next)
+				if(e->ndub > 0){
+					if(canintrodubs)
+						fprintf(f, portaldub), canintrodubs--;
+					if(canintroseason)
+						fprintf(f, "<ul><li>Season %d", s->no), canintroseason--;
+					fprintf(f, "<ul>\n");
+					for(; e->ndub--; e->dubs++)
+						fprintf(f, "<li>Episode %d: <a href=\"%s/s/%d/%d/dub/%s\">%s</a></li>\n",
+							e->no, req->target, s->no, e->no, *e->dubs, *e->dubs);
+					fprintf(f, "</ul>");
+				}
+			if(!canintroseason)
+				fprintf(f, "</li></ul>\n");
 		}
-		printf("</ul>");
-	}else
-		fwrite(datel[0], 1, strlen(datel[0]), stdout);
-	if(rtype == RTseries){
-		printf(portalseriestream);
-		printf("<ul>\n");
-		for(i = 0; i < ndate; i++){
-			if(strcmp(datel[i], "") == 0)
-				continue;
-			printf("<li>Season %d", i+1);
-			printf("<ul>\n");
-			for(j = 0; j < nepisode[i]; j++)
-				printf("<li><a href=\"%s/s/%d/%s/video\">Episode %s</a></li>\n",
-					req->target, i+1, episodel[i][j], episodel[i][j]);
-			printf("</ul></li>\n");
+		if(r.serie.nextra > 0){
+			fprintf(f, portalextra);
+			fprintf(f, "<ul>\n");
+			for(; r.serie.nextra--; r.serie.extras++)
+				fprintf(f, "<li><a href=\"%s/extra/%s\">%s</a></li>\n", req->target, *r.serie.extras, *r.serie.extras);
+			fprintf(f, "</ul>");
 		}
-		printf("</ul>");
-	}else
-		printf(portalmoviestream, req->target);
-	if(nsub > 0){
-		printf(portalsub);
-		printf("<ul>\n");
-		for(i = 0; i < nsub; i++)
-			printf("<li><a href=\"%s/sub/%s\">%s</a></li>\n",
-				req->target, subl[i], subl[i]);
-		printf("</ul>");
+		break;
+	default: goto Rogue;
 	}
-	//printf(portaldub);
-	if(nextra > 0){
-		printf(portalextra);
-		printf("<ul>\n");
-		for(i = 0; i < nextra; i++)
-			printf("<li><a href=\"%s/extra/%s\">%s</a></li>\n",
-				req->target, extral[i], extral[i]);
-		printf("</ul>");
-	}
-	printf(portalfeet);
-	hprint("");
+	fprintf(f, portalfeet);
+	fseeko(f, 0, SEEK_SET);
+	if(fstat(fileno(f), &fst) < 0)
+		switch(errno){
+		case EACCES: hfail(Sforbid);
+		case ENOENT: hfail(Snotfound);
+		default: hfatal("sendportal: fstat");
+		}
+	sendfile(f, &fst);
+	fclose(f);
 }
 
 int
 main()
 {
+	FILE *f;
 	struct stat fst;
 	char path[512];
 
@@ -799,9 +1089,13 @@ main()
 		case ENOENT: hfail(Snotfound);
 		default: hfatal("stat");
 		}
-	if(S_ISREG(fst.st_mode))
-		sendfile(path, &fst);
-	else
+	if(S_ISREG(fst.st_mode)){
+		f = fopen(path, "r");
+		if(f == nil)
+			hfatal("fopen");
+		sendfile(f, &fst);
+		fclose(f);
+	}else
 		sendportal(path);
 	exit(0);
 }

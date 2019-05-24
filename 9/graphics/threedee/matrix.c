@@ -41,17 +41,25 @@ mulm(Matrix a, Matrix b)
 }
 
 void
-transm(Matrix a, Matrix b)
+transm(Matrix m)
 {
 	int i, j;
 	double tmp;
 
-	for(i = 0; i < 4-1; i++)
-		for(j = i+1; j < 4; j++){
-			tmp = a[i][j];
-			a[i][j] = b[i][j];
-			b[i][j] = tmp;
+	for(i = 0; i < 4; i++)
+		for(j = i; j < 4; j++){
+			tmp = m[i][j];
+			m[i][j] = m[j][i];
+			m[j][i] = tmp;
 		}
+}
+
+double
+detm(Matrix m)
+{
+	return m[0][0]*(m[1][1]*m[2][2] - m[1][2]*m[2][1])
+		+ m[0][1]*(m[1][2]*m[2][0] - m[1][0]*m[2][2])
+		+ m[0][2]*(m[1][0]*m[2][1] - m[1][1]*m[2][0]);
 }
 
 Vector3

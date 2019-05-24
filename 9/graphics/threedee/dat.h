@@ -28,7 +28,7 @@ struct Triangle {
 
 struct Triangle3 {
 	Vector3 p0, p1, p2;
-	Image *color;
+	Image *tx;
 };
 
 struct Mesh {

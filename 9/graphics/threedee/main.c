@@ -7,10 +7,11 @@
 #include "dat.h"
 #include "fns.h"
 
-Mousectl *mc;
-Keyboardctl *kc;
+Mousectl *mctl;
+Keyboardctl *kctl;
 Channel *scrsync;
-Vector O, Base;
+Point orig;
+Vector basis;
 double Znear, Zfar, Zoff, a;
 Matrix proj;
 Vector3 light;
@@ -64,6 +65,17 @@ erealloc(void *ptr, ulong n)
 	return p;
 }
 
+Image *
+eallocimage(Display *d, Rectangle r, ulong chan, int repl, ulong col)
+{
+	Image *i;
+
+	i = allocimage(d, r, chan, repl, col);
+	if(i == nil)
+		sysfatal("allocimage: %r");
+	return i;
+}
+
 #pragma varargck type "V" Vector3
 int
 Vfmt(Fmt *f)
@@ -91,9 +103,9 @@ vectopt(Vector v)
 }
 
 Point
-toworld(Point p)
+toscreen(Vector p)
 {
-	return addpt(vectopt(O), Pt(p.x*Base.x, p.y*Base.y));
+	return addpt(orig, Pt(p.x*basis.x, p.y*basis.y));
 }
 
 int
@@ -112,17 +124,17 @@ depthcmp(void *a, void *b)
 void
 redraw(void)
 {
-	int i;
-	Triangle3 trans;
+	Triangle3 trans, *vistris;
+	Vector3 n;
 	Matrix Xrot = {
 		1, 0, 0, 0,
 		0, cos(θ/2), -sin(θ/2), 0,
 		0, sin(θ/2), cos(θ/2), 0,
 		0, 0, 0, 1,
 	}, Yrot = {
-		cos(θ/3), 0, sin(θ/3), 0,
+		cos(θ/3), 0, -sin(θ/3), 0,
 		0, 1, 0, 0,
-		-sin(θ/3), 0, cos(θ/3), 0,
+		sin(θ/3), 0, cos(θ/3), 0,
 		0, 0, 0, 1,
 	}, Zrot = {
 		cos(θ), -sin(θ), 0, 0,
@@ -134,15 +146,17 @@ redraw(void)
 		0, 1, 0, 0,
 		0, 0, 1, Zoff,
 		0, 0, 0, 1,
+	}, S = {
+		Dx(screen->r)/2, 0, 0, 0,
+		0, Dy(screen->r)/2, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1,
 	};
-	Vector3 n;
 	u32int c;
-	Triangle3 *vistris;
-	int nvistri;
+	int nvistri, i;
 
 	vistris = nil;
 	nvistri = 0;
-
 	mulm(Yrot, Xrot);
 	mulm(Zrot, Yrot);
 	mulm(RT, Zrot);
@@ -162,16 +176,11 @@ redraw(void)
 			trans.p0 = addvec3(trans.p0, Vec3(1, 1, 0));
 			trans.p1 = addvec3(trans.p1, Vec3(1, 1, 0));
 			trans.p2 = addvec3(trans.p2, Vec3(1, 1, 0));
-			trans.p0.x *= Dx(screen->r)/2;
-			trans.p0.y *= Dy(screen->r)/2;
-			trans.p1.x *= Dx(screen->r)/2;
-			trans.p1.y *= Dy(screen->r)/2;
-			trans.p2.x *= Dx(screen->r)/2;
-			trans.p2.y *= Dy(screen->r)/2;
+			trans.p0 = mulvecm(trans.p0, S);
+			trans.p1 = mulvecm(trans.p1, S);
+			trans.p2 = mulvecm(trans.p2, S);
 			c = 0xff*fabs(dotvec3(n, light));
-			trans.color = allocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, (c<<24)|(c<<16)|(c<<8)|0xff);
-			if(trans.color == nil)
-				sysfatal("allocimage: %r");
+			trans.tx = eallocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, c<<24|c<<16|c<<8|0xff);
 			vistris = erealloc(vistris, ++nvistri*sizeof(Triangle3));
 			vistris[nvistri-1] = trans;
 		}
@@ -179,17 +188,17 @@ redraw(void)
 	qsort(vistris, nvistri, sizeof(Triangle3), depthcmp);
 	for(i = 0; i < nvistri; i++){
 		filltriangle(screen, Trianpt(
-			toworld(vectopt(Vec(vistris[i].p0.x, vistris[i].p0.y))),
-			toworld(vectopt(Vec(vistris[i].p1.x, vistris[i].p1.y))),
-			toworld(vectopt(Vec(vistris[i].p2.x, vistris[i].p2.y)))
-			), vistris[i].color, ZP);
+			toscreen(Vec(vistris[i].p0.x, vistris[i].p0.y)),
+			toscreen(Vec(vistris[i].p1.x, vistris[i].p1.y)),
+			toscreen(Vec(vistris[i].p2.x, vistris[i].p2.y))
+			), vistris[i].tx, ZP);
 		if(dowireframe)
 			triangle(screen, Trianpt(
-				toworld(vectopt(Vec(vistris[i].p0.x, vistris[i].p0.y))),
-				toworld(vectopt(Vec(vistris[i].p1.x, vistris[i].p1.y))),
-				toworld(vectopt(Vec(vistris[i].p2.x, vistris[i].p2.y)))
+				toscreen(Vec(vistris[i].p0.x, vistris[i].p0.y)),
+				toscreen(Vec(vistris[i].p1.x, vistris[i].p1.y)),
+				toscreen(Vec(vistris[i].p2.x, vistris[i].p2.y))
 				), 0, display->black, ZP);
-		freeimage(vistris[i].color);
+		freeimage(vistris[i].tx);
 	}
 	free(vistris);
 	flushimage(display, 1);
@@ -197,9 +206,30 @@ redraw(void)
 }
 
 void
+rmb(void)
+{
+	enum {
+		DOWIREFRM,
+	};
+	static char *items[] = {
+	 [DOWIREFRM]	"toggle wireframe",
+		nil,
+	};
+	static Menu menu = { .item = items };
+
+	switch(menuhit(3, mctl, &menu, nil)){
+	case DOWIREFRM:
+		dowireframe ^= 1;
+		break;
+	}
+	t0 = nsec();
+}
+
+void
 mouse(void)
 {
-	return;
+	if(mctl->buttons & 4)
+		rmb();
 }
 
 void
@@ -225,14 +255,14 @@ resized(void)
 	if(getwindow(display, Refnone) < 0)
 		fprint(2, "can't reattach to window\n");
 	unlockdisplay(display);
-	O = Vec(screen->r.min.x, screen->r.max.y);
+	orig = Pt(screen->r.min.x, screen->r.max.y);
 	a = (double)Dy(screen->r)/Dx(screen->r);
 	proj[0][0] = a*(1/tan(FOV/2*DEG));
 	redraw();
 }
 
 void
-refreshproc(void *)
+scrsynproc(void *)
 {
 	for(;;){
 		send(scrsync, nil);
@@ -243,7 +273,7 @@ refreshproc(void *)
 void
 usage(void)
 {
-	fprint(2, "usage: %s [ -w ]\n", argv0);
+	fprint(2, "usage: %s\n", argv0);
 	threadexitsall("usage");
 }
 
@@ -255,24 +285,17 @@ threadmain(int argc, char *argv[])
 	fmtinstall('V', Vfmt);
 	fmtinstall('T', Tfmt);
 	ARGBEGIN{
-	case 'w': /* make a menu instead */
-		dowireframe++;
-		break;
 	default: usage();
 	}ARGEND;
 
 	if(initdraw(nil, nil, "threedee") < 0)
 		sysfatal("initdraw: %r");
-	mc = initmouse(nil, screen);
-	if(mc == nil)
+	if((mctl = initmouse(nil, screen)) == nil)
 		sysfatal("initmouse: %r");
-	kc = initkeyboard(nil);
-	if(kc == nil)
+	if((kctl = initkeyboard(nil)) == nil)
 		sysfatal("initkeyboard: %r");
-
-	O = Vec(screen->r.min.x, screen->r.max.y);
-	Base = Vec(1, -1);
-
+	orig = Pt(screen->r.min.x, screen->r.max.y);
+	basis = Vec(1, -1);
 	Znear = 0.1;
 	Zfar = 1000;
 	Zoff = 2;
@@ -283,32 +306,28 @@ threadmain(int argc, char *argv[])
 	proj[2][3] = -Zfar * Znear / (Zfar + Znear);
 	proj[3][2] = 1;
 	light = normvec3(Vec3(0, 0, -1));
-
-	rocket.ntri = objread("mdl/rocket.obj", &rocket.tris);
-	if(rocket.ntri < 0)
+	if((rocket.ntri = objread("mdl/rocket.obj", &rocket.tris)) < 0)
 		sysfatal("objread: %r");
-
 	scrsync = chancreate(1, 0);
 	display->locking = 1;
 	unlockdisplay(display);
-	proccreate(refreshproc, nil, STACK);
-
+	proccreate(scrsynproc, nil, STACK);
 	ω = 1;
 	t0 = nsec();
-
 	for(;;){
+		enum {MOUSE, RESIZE, KBD, SCRSYN};
 		Alt a[] = {
-			{mc->c, &mc->Mouse, CHANRCV},
-			{mc->resizec, nil, CHANRCV},
-			{kc->c, &r, CHANRCV},
+			{mctl->c, &mctl->Mouse, CHANRCV},
+			{mctl->resizec, nil, CHANRCV},
+			{kctl->c, &r, CHANRCV},
 			{scrsync, nil, CHANRCV},
 			{nil, nil, CHANEND}
 		};
 		switch(alt(a)){
-		case 0: mouse(); break;
-		case 1: resized(); break;
-		case 2: key(r); break;
-		case 3: redraw(); break;
+		case MOUSE: mouse(); break;
+		case RESIZE: resized(); break;
+		case KBD: key(r); break;
+		case SCRSYN: redraw(); break;
 		}
 		Δt = (nsec()-t0)/1e9;
 		θ += ω*Δt;
