@@ -1,2 +1,0 @@
-#!/bin/rc
-exec /bin/bbs -m /usr/rgl/tmp/bbs >>[2]/sys/log/bbs

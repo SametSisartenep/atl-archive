@@ -1,4 +1,0 @@
-TEXT	sum(SB), $0
-	MOVL b+8(FP), AX
-	ADDL BP, AX
-	RET
