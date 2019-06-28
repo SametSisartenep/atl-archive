@@ -1,0 +1,10 @@
+</$objtype/mkfile
+
+BIN=/$objtype/bin/
+TARG=raycast
+OFILES=\
+	main.$0
+
+HFILES=dat.h fns.h
+
+</sys/src/cmd/mkone

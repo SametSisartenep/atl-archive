@@ -1,0 +1,8 @@
+</$objtype/mkfile
+
+BIN=/$objtype/bin/conv
+TARG=temp
+OFILES=\
+	temp.$O
+
+</sys/src/cmd/mkmany

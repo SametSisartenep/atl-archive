@@ -1,0 +1,9 @@
+</$objtype/mkfile
+BIN=/$objtype/bin
+
+OFILES=\
+	geoparse.$O
+
+TARG=geoparse
+
+</sys/src/cmd/mkone

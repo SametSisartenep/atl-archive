@@ -1,0 +1,11 @@
+</$objtype/mkfile
+
+BIN=/$objtype/bin/
+TARG=particles
+OFILES=\
+	particles.$O\
+	vec.$O
+
+HFILES=dat.h fns.h
+
+</sys/src/cmd/mkone

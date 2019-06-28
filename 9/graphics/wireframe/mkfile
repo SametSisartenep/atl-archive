@@ -1,0 +1,12 @@
+</$objtype/mkfile
+
+BIN=/$objtype/bin/
+TARG=wireframe
+OFILES=\
+	main.$O\
+	vec.$O\
+	util.$O
+
+HFILES=dat.h fns.h
+
+</sys/src/cmd/mkone
