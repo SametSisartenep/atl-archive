@@ -6,6 +6,7 @@ typedef double Matrix[3][3];
 typedef double Matrix3[4][4];
 typedef struct Quaternion Quaternion;
 typedef struct ReferenceFrame ReferenceFrame;
+typedef struct ReferenceFrame3 ReferenceFrame3;
 typedef struct Triangle3 Triangle3;
 
 struct Point2 {
@@ -21,6 +22,11 @@ struct Quaternion {
 };
 
 struct ReferenceFrame {
+	Point2 p;
+	Point2 xb, yb;
+};
+
+struct ReferenceFrame3 {
 	Point3 p;
 	Point3 xb, yb, zb;
 };
@@ -76,7 +82,8 @@ Quaternion invq(Quaternion);
 double qlen(Quaternion);
 
 /* ReferenceFrame */
-Point3 rframexform(Point3, ReferenceFrame);
+Point2 rframexform(Point2, ReferenceFrame);
+Point3 rframexform3(Point3, ReferenceFrame3);
 
 /* Triangle3 */
 Point3 centroid(Triangle3);

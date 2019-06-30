@@ -1,11 +1,9 @@
 #include <u.h>
 #include <libc.h>
 
-void greet(void);
-
 void
 main()
 {
-	greet();
-	//exits(0);
+	print("Hello world\n");
+	exits(0);
 }

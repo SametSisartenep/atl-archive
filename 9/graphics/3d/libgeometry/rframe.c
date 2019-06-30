@@ -2,8 +2,19 @@
 #include <libc.h>
 #include "../geometry.h"
 
+Point2
+rframexform(Point2 p, ReferenceFrame rf)
+{
+	Matrix m = {
+		rf.xb.x, rf.xb.y, -dotvec3(rf.xb, rf.p),
+		rf.yb.x, rf.yb.y, -dotvec3(rf.yb, rf.p),
+		0, 0, 1,
+	};
+	return xform(p, m);
+}
+
 Point3
-rframexform(Point3 p, ReferenceFrame rf)
+rframexform3(Point3 p, ReferenceFrame3 rf)
 {
 	Matrix3 m = {
 		rf.xb.x, rf.xb.y, rf.xb.z, -dotvec3(rf.xb, rf.p),

@@ -18,8 +18,8 @@ double θ, ω;
 RWLock worldlock;
 Triangle3 tri;
 
-Camera cam0, cam1, *maincam;
-double fov;
+Camera cam0, cam1, cam2, cam3, *maincam;
+int camno;
 
 #pragma varargck type "v" Point2
 int
@@ -81,7 +81,7 @@ drawstats(void)
 	int i;
 
 	snprint(stats[Sfov], sizeof(stats[Sfov]), "FOV %g°", maincam->fov);
-	snprint(stats[Scamno], sizeof(stats[Scamno]), "CAM %d", maincam == &cam0 ? 1 : 2);
+	snprint(stats[Scamno], sizeof(stats[Scamno]), "CAM %d", camno);
 	snprint(stats[Scampos], sizeof(stats[Scampos]), "%V", maincam->p);
 	snprint(stats[Syaw], sizeof(stats[Syaw]), "%V", maincam->zb);
 	snprint(stats[Sp0vcs], sizeof(stats[Sp0vcs]), "VCS %V", rframexform(tri.p0, *maincam));
@@ -140,18 +140,32 @@ screenshot(void)
 void
 mouse(void)
 {
+	Matrix3 RL = {
+		cos(5*DEG), sin(5*DEG), 0, 0,
+		-sin(5*DEG), cos(5*DEG), 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1,
+	}, RR = {
+		cos(-5*DEG), sin(-5*DEG), 0, 0,
+		-sin(-5*DEG), cos(-5*DEG), 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1,
+	};
+
+	if(mctl->buttons & 1)
+		placecamera(maincam, maincam->p, maincam->zb, xform3(maincam->yb, RL));
+	if(mctl->buttons & 4)
+		placecamera(maincam, maincam->p, maincam->zb, xform3(maincam->yb, RR));
 	if(mctl->buttons & 8){
-		fov -= 5;
-		if(fov < 1)
-			fov = 1;
-		maincam->fov = fov;
+		maincam->fov -= 5;
+		if(maincam->fov < 1)
+			maincam->fov = 1;
 		reloadcamera(maincam);
 	}
 	if(mctl->buttons & 16){
-		fov += 5;
-		if(fov > 359)
-			fov = 359;
-		maincam->fov = fov;
+		maincam->fov += 5;
+		if(maincam->fov > 359)
+			maincam->fov = 359;
 		reloadcamera(maincam);
 	}
 }
@@ -160,14 +174,14 @@ void
 key(Rune r)
 {
 	Matrix3 TL = {
-		cos(5*DEG), 0, -sin(5*DEG), 0,
+		cos(5*DEG), 0, sin(5*DEG), 0,
 		0, 1, 0, 0,
-		sin(5*DEG), 0, cos(5*DEG), 0,
+		-sin(5*DEG), 0, cos(5*DEG), 0,
 		0, 0, 0, 1,
 	}, TR = {
-		cos(-5*DEG), 0, -sin(-5*DEG), 0,
+		cos(-5*DEG), 0, sin(-5*DEG), 0,
 		0, 1, 0, 0,
-		sin(-5*DEG), 0, cos(-5*DEG), 0,
+		-sin(-5*DEG), 0, cos(-5*DEG), 0,
 		0, 0, 0, 1,
 	};
 
@@ -189,9 +203,19 @@ key(Rune r)
 		break;
 	case KF|1:
 		maincam = &cam0;
+		camno = 1;
 		break;
 	case KF|2:
 		maincam = &cam1;
+		camno = 2;
+		break;
+	case KF|3:
+		maincam = &cam2;
+		camno = 3;
+		break;
+	case KF|4:
+		maincam = &cam3;
+		camno = 4;
 		break;
 	case KF|12:
 		screenshot();
@@ -241,12 +265,16 @@ threadmain(int argc, char *argv[])
 	tri.p0 = Pt3(0, 1, 2, 1);
 	tri.p1 = Pt3(-1, 0, 2, 1);
 	tri.p2 = Pt3(1, 0, 2, 1);
-	fov = 90;
 	placecamera(&cam0, Pt3(2, 0, 4, 1), Pt3(0, 0, 0, 1), Vec3(0, 1, 0));
-	configcamera(&cam0, screen, 0, 0.1, 100, Portho);
-	placecamera(&cam1, Pt3(2, 0, -4, 1), Pt3(2, 0, 4, 1), Vec3(0, 1, 0));
-	configcamera(&cam1, screen, fov, 0.1, 100, Ppersp);
+	configcamera(&cam0, screen, 90, 0.1, 100, Ppersp);
+	placecamera(&cam1, Pt3(-2, 0, 4, 1), Pt3(0, 0, 0, 1), Vec3(0, 1, 0));
+	configcamera(&cam1, screen, 90, 0.1, 100, Ppersp);
+	placecamera(&cam2, Pt3(-2, 0, -4, 1), Pt3(0, 0, 0, 1), Vec3(0, 1, 0));
+	configcamera(&cam2, screen, 90, 0.1, 100, Ppersp);
+	placecamera(&cam3, Pt3(2, 0, -4, 1), Pt3(0, 0, 0, 1), Vec3(0, 1, 0));
+	configcamera(&cam3, screen, 90, 0.1, 100, Ppersp);
 	maincam = &cam0;
+	camno = 1;
 	display->locking = 1;
 	unlockdisplay(display);
 	proccreate(scrsynproc, nil, STACK);
