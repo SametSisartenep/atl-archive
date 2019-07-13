@@ -3,15 +3,22 @@ typedef enum {
 	Ppersp		/* perspective */
 } Projection;
 
+typedef struct Vertex Vertex;
 typedef struct Triangle Triangle;
 typedef struct Camera Camera;
+
+struct Vertex {
+	Point3 p;	/* position */
+	Point3 n;	/* surface normal */
+	//Image tx;	/* (?) */
+};
 
 struct Triangle {
 	Point p0, p1, p2;
 };
 
 struct Camera {
-	ReferenceFrame;		/* VCS */
+	ReferenceFrame3;		/* VCS */
 	Image *viewport;
 	double fov;		/* vertical FOV */
 	struct {

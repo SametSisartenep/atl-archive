@@ -28,9 +28,14 @@ perspective(Matrix3 m, double fov, double a, double n, double f)
 	identity3(m);
 	m[0][0] =  cotan/a;
 	m[1][1] =  cotan;
-	m[2][2] =  f/(f - n);
-	m[2][3] = -f*n / (f - n);
-	m[3][2] =  1;
+	/* RH */
+	m[2][2] = -(f+n)/(f-n);
+	m[2][3] = -2*f*n/(f-n);
+	m[3][2] = -1;
+	/* LH */
+//	m[2][2] = (f+n)/(f-n);
+//	m[2][3] = -2*f*n/(f-n);
+//	m[3][2] = 1;
 }
 
 void
@@ -39,7 +44,7 @@ orthographic(Matrix3 m, double l, double r, double b, double t, double n, double
 	identity3(m);
 	m[0][0] =  2/(r - l);
 	m[1][1] =  2/(t - b);
-	m[2][2] =  2/(f - n);
+	m[2][2] = -2/(f - n);
 	m[0][3] = -(r + l)/(r - l);
 	m[1][3] = -(t + b)/(t - b);
 	m[2][3] = -(f + n)/(f - n);
@@ -63,7 +68,7 @@ placecamera(Camera *c, Point3 p, Point3 focus, Point3 up)
 	if(focus.w == 0)
 		c->zb = focus;
 	else
-		c->zb = normvec3(subpt3(focus, c->p));
+		c->zb = normvec3(subpt3(c->p, focus));
 	c->xb = normvec3(crossvec3(up, c->zb));
 	c->yb = crossvec3(c->zb, c->xb);
 }
@@ -78,7 +83,7 @@ void
 reloadcamera(Camera *c)
 {
 	double a;
-	double len, l, r, b, t;
+	double l, r, b, t;
 
 	verifycfg(c);
 	switch(c->ptype){

@@ -3,6 +3,7 @@
 BIN=$home/$objtype/bin
 TARG=3d
 OFILES=main.$O\
+	obj.$O
 
 HFILES=geometry.h graphics.h dat.h fns.h
 

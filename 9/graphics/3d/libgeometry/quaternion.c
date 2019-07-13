@@ -29,12 +29,30 @@ subq(Quaternion a, Quaternion b)
 Quaternion
 mulq(Quaternion q, Quaternion r)
 {
-	Point3 v1, v2, tmp;
+	Point3 qv, rv, tmp;
 
-	v1 = Vec3(q.i, q.j, q.k);
-	v2 = Vec3(r.i, r.j, r.k);
-	tmp = addpt3(addpt3(mulpt3(v2, q.r), mulpt3(v1, r.r)), crossvec3(v1, v2));
-	return (Quaternion){q.r*r.r - dotvec3(v1, v2), tmp.x, tmp.y, tmp.z};
+	qv = Vec3(q.i, q.j, q.k);
+	rv = Vec3(r.i, r.j, r.k);
+	tmp = addpt3(addpt3(mulpt3(rv, q.r), mulpt3(qv, r.r)), crossvec3(qv, rv));
+	return (Quaternion){q.r*r.r - dotvec3(qv, rv), tmp.x, tmp.y, tmp.z};
+}
+
+Quaternion
+smulq(Quaternion q, double s)
+{
+	return (Quaternion){q.r*s, q.i*s, q.j*s, q.k*s};
+}
+
+Quaternion
+sdivq(Quaternion q, double s)
+{
+	return (Quaternion){q.r/s, q.i/s, q.j/s, q.k/s};
+}
+
+double
+dotq(Quaternion q, Quaternion r)
+{
+	return q.r*r.r + q.i*r.i + q.j*r.j + q.k*r.k;
 }
 
 Quaternion
@@ -42,14 +60,20 @@ invq(Quaternion q)
 {
 	double len²;
 
-	len² = q.r*q.r + q.i*q.i + q.j*q.j + q.k*q.k;
+	len² = dotq(q, q);
 	if(len² == 0)
 		return (Quaternion){0, 0, 0, 0};
-	return (Quaternion){q.r /= len², q.i = -q.i/len², q.j = -q.j/len², q.k = -q.k/len²};
+	return (Quaternion){q.r/len², -q.i/len², -q.j/len², -q.k/len²};
 }
 
 double
 qlen(Quaternion q)
 {
 	return sqrt(q.r*q.r + q.i*q.i + q.j*q.j + q.k*q.k);
+}
+
+Quaternion
+normq(Quaternion q)
+{
+	return sdivq(q, qlen(q));
 }

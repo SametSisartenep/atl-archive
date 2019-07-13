@@ -42,6 +42,7 @@ Point2 addpt2(Point2, Point2);
 Point2 subpt2(Point2, Point2);
 Point2 mulpt2(Point2, double);
 Point2 divpt2(Point2, double);
+Point2 lerp2(Point2, Point2, double);
 double dotvec2(Point2, Point2);
 double vec2len(Point2);
 Point2 normvec2(Point2);
@@ -52,6 +53,7 @@ Point3 addpt3(Point3, Point3);
 Point3 subpt3(Point3, Point3);
 Point3 mulpt3(Point3, double);
 Point3 divpt3(Point3, double);
+Point3 lerp3(Point3, Point3, double);
 double dotvec3(Point3, Point3);
 Point3 crossvec3(Point3, Point3);
 double vec3len(Point3);
@@ -78,12 +80,17 @@ Quaternion Quatvec(double, Point3);
 Quaternion addq(Quaternion, Quaternion);
 Quaternion subq(Quaternion, Quaternion);
 Quaternion mulq(Quaternion, Quaternion);
+Quaternion smulq(Quaternion, double);
+Quaternion sdivq(Quaternion, double);
+double dotq(Quaternion, Quaternion);
 Quaternion invq(Quaternion);
 double qlen(Quaternion);
+Quaternion normq(Quaternion);
 
 /* ReferenceFrame */
 Point2 rframexform(Point2, ReferenceFrame);
 Point3 rframexform3(Point3, ReferenceFrame3);
+Point3 hsrframexform3(Point3, ReferenceFrame3);
 
 /* Triangle3 */
 Point3 centroid(Triangle3);

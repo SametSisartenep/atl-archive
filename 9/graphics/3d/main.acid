@@ -963,8 +963,30 @@ Quaternion(addr) {
 	print("	k	", addr.k, "\n");
 };
 
-sizeofReferenceFrame = 128;
+sizeofReferenceFrame = 72;
 aggr ReferenceFrame
+{
+	Point2 0 p;
+	Point2 24 xb;
+	Point2 48 yb;
+};
+
+defn
+ReferenceFrame(addr) {
+	complex ReferenceFrame addr;
+	print("Point2 p {\n");
+	Point2(addr.p);
+	print("}\n");
+	print("Point2 xb {\n");
+	Point2(addr.xb);
+	print("}\n");
+	print("Point2 yb {\n");
+	Point2(addr.yb);
+	print("}\n");
+};
+
+sizeofReferenceFrame3 = 128;
+aggr ReferenceFrame3
 {
 	Point3 0 p;
 	Point3 32 xb;
@@ -973,8 +995,8 @@ aggr ReferenceFrame
 };
 
 defn
-ReferenceFrame(addr) {
-	complex ReferenceFrame addr;
+ReferenceFrame3(addr) {
+	complex ReferenceFrame3 addr;
 	print("Point3 p {\n");
 	Point3(addr.p);
 	print("}\n");
@@ -1013,6 +1035,24 @@ Triangle3(addr) {
 
 Portho = 0;
 Ppersp = 1;
+sizeofVertex = 64;
+aggr Vertex
+{
+	Point3 0 p;
+	Point3 32 n;
+};
+
+defn
+Vertex(addr) {
+	complex Vertex addr;
+	print("Point3 p {\n");
+	Point3(addr.p);
+	print("}\n");
+	print("Point3 n {\n");
+	Point3(addr.n);
+	print("}\n");
+};
+
 sizeofTriangle = 24;
 aggr Triangle
 {
@@ -1068,8 +1108,8 @@ aggr Camera
 defn
 Camera(addr) {
 	complex Camera addr;
-	print("ReferenceFrame {\n");
-		ReferenceFrame(addr+0);
+	print("ReferenceFrame3 {\n");
+		ReferenceFrame3(addr+0);
 	print("}\n");
 	print("	viewport	", addr.viewport\Y, "\n");
 	print("	fov	", addr.fov, "\n");
@@ -1083,22 +1123,20 @@ Camera(addr) {
 STACK = 8192;
 SEC = 1000;
 FPS = 60;
-Sfov = 0;
-Scamno = 1;
-Scampos = 2;
-Syaw = 3;
-Sp0vcs = 4;
-Sp0norm = 5;
-Sp0view = 6;
-Se = 7;
+Scamno = 0;
+Scampos = 1;
+Scambs = 2;
+Sfov = 3;
+Se = 4;
 complex Mousectl mctl;
 complex Keyboardctl kctl;
-complex Point orig;
-complex Point2 basis;
+complex ReferenceFrame scrrf;
 complex RWLock worldlock;
 complex Triangle3 tri;
 complex Camera cam0;
 complex Camera cam1;
+complex Camera cam2;
+complex Camera cam3;
 complex Camera maincam;
 complex Fmt vfmt:f;
 complex Point2 vfmt:p;
@@ -1108,6 +1146,8 @@ complex Point3 flatten:p;
 complex Point2 toscreen:p;
 complex Point fromscreen:p;
 complex Triangle redraw:trit;
+complex Quaternion key:q;
+complex Quaternion key:qtmp;
 MOUSE = 0;
 KBD = 1;
 RESIZE = 2;

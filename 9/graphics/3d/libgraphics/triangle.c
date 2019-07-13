@@ -14,7 +14,7 @@ Triangle
 Trianpt(Point p0, Point p1, Point p2)
 {
 	return (Triangle){p0, p1, p2};
-};
+}
 
 void
 triangle(Image *dst, Triangle t, int thick, Image *src, Point sp)

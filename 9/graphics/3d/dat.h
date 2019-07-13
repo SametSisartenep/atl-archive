@@ -5,14 +5,43 @@ enum {
 };
 
 enum {
-	Sfov,
+	K↑,
+	K↓,
+	K←,
+	K→,
+	Krise,
+	Kfall,
+	KR↑,
+	KR↓,
+	KR←,
+	KR→,
+	KR↺,
+	KR↻,
+	Kcam0,
+	Kcam1,
+	Kcam2,
+	Kcam3,
+	Kscrshot,
+	Ke
+};
+
+enum {
 	Scamno,
 	Scampos,
-	Syaw,
-	Sp0vcs,
-	Sp0norm,
-	Sp0view,
-	Sp0scr,
+	Sfov,
 	Se
 };
 char stats[Se][256];
+
+typedef struct Mesh Mesh;
+typedef struct TTriangle3 TTriangle3;
+
+struct Mesh {
+	Triangle3 *tris;
+	int ntri;
+};
+
+struct TTriangle3 {
+	Triangle3;
+	Image *tx;
+};

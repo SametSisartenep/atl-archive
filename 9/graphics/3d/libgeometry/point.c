@@ -40,6 +40,18 @@ divpt2(Point2 p, double s)
 	return (Point2){p.x/s, p.y/s, p.w/s};
 }
 
+Point2
+lerp2(Point2 a, Point2 b, double t)
+{
+	if(t < 0) t = 0;
+	if(t > 1) t = 1;
+	return (Point2){
+		(1 - t)*a.x + t*b.x,
+		(1 - t)*a.y + t*b.y,
+		(1 - t)*a.w + t*b.w
+	};
+}
+
 double
 dotvec2(Point2 a, Point2 b)
 {
@@ -99,6 +111,19 @@ Point3
 divpt3(Point3 p, double s)
 {
 	return (Point3){p.x/s, p.y/s, p.z/s, p.w/s};
+}
+
+Point3
+lerp3(Point3 a, Point3 b, double t)
+{
+	if(t < 0) t = 0;
+	if(t > 1) t = 1;
+	return (Point3){
+		(1 - t)*a.x + t*b.x,
+		(1 - t)*a.y + t*b.y,
+		(1 - t)*a.z + t*b.z,
+		(1 - t)*a.w + t*b.w
+	};
 }
 
 double
